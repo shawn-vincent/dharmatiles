@@ -1489,7 +1489,8 @@ function holdPat(q, k, GAPMAX, lowK, ms = 1, mw = MINSW) {
   const tri = nTri, nfaces = nFace;
   const spines = new Float32Array(6 * sites.length);   // each site's spine, from its first layer face to its last (or the fuzzy top)
   sites.forEach((s, q) => { const za = effG(s.i, s.x, s.y), zb = Math.min(H - s.sTop, effG(s.j, s.x, s.y)), o = 6 * q; spines.set([s.x + s.sx * (za - s.zd), s.y + s.sy * (za - s.zd), za, s.x + s.sx * (zb - s.zd), s.y + s.sy * (zb - s.zd), zb], o); });
-  return { W, H, D, y0, y1, stones, T, sites: sites.length, pieces: pieces.length, groups: groups.size, lost, dead: deadPieces.length, orphaned: nOrphan, fitted: nFit, cleared: nClear, joinedIn: nJoinIn, noHold, tri, spines, layers: { gnx, gny, GRX, GR, x0: -hu, y0, EG } };
+  const spineGrp = Int32Array.from(sites, s => { const pc = s.pieces.find(p => !p.dead); return pc ? pc.grp : find(s.id); });   /* each spine's body, for its colour */
+  return { W, H, D, y0, y1, stones, T, sites: sites.length, pieces: pieces.length, groups: groups.size, lost, dead: deadPieces.length, orphaned: nOrphan, fitted: nFit, cleared: nClear, joinedIn: nJoinIn, noHold, tri, spines, spineGrp, layers: { gnx, gny, GRX, GR, x0: -hu, y0, EG } };
 }
 
 // ---------- Granite (direction 'through', one layer): one 2D power diagram on the back plane (x, z); each cell is a stone run through along y from the back to its own front.
@@ -1603,7 +1604,7 @@ function graniteWall(seed, P, opt = {}) {
   let lost = 0; for (const q of ST) if (q && !q.dead && !seen.has(q.s.id)) lost++;
   const spines = new Float32Array(6 * n);   // each site's spine, along y from the back to its stone's front
   sites.forEach((s, q) => { const f = s.yf, dy1 = y1 - ym, dy2 = f - ym; spines.set([s.x + s.sx * dy1, y1, s.z + s.sz * dy1, s.x + s.sx * dy2, f, s.z + s.sz * dy2], 6 * q); });
-  return { W, H, D, y0, y1, stones, T, sites: n, pieces: stones.length, groups: stones.length, lost, noHold: 0, tri: nTri, spines, layers: null };
+  return { W, H, D, y0, y1, stones, T, sites: n, pieces: stones.length, groups: stones.length, lost, noHold: 0, tri: nTri, spines, spineGrp: Int32Array.from(sites, s => s.id), layers: null };
 }
 // ---------- cracks ----------
 // The network is a table of convex boundary polygons in a fixed frame, made once for each Network, Spacing and Branching (each with its rank in the
@@ -2304,6 +2305,7 @@ function build(seed, P, opt = {}) {
 // A stone's faces, as triangles (positions and colours, three vertices each), where each face starts (so the overhang paint can find it), and the outline lines.
 // Colours are bytes; the page lights the faces flat, so no normals are sent.
 const BEVEL_RGB = [20, 200, 255], PART_RGB = [200, 245, 255], STONE_RGB = [185, 180, 168], CRACK_RGB = [71, 74, 76], BAND_RGB = [255, 140, 26], OVER_RGB = [229, 72, 59];   // stone, a crack's inside (dark grey), 55 to 65 degrees (orange), past 65 (red)
+function vividOf(g) { const h = hash2(g, 7) / 4294967296, l = 0.42, s = 0.95; const c = (1 - Math.abs(2 * l - 1)) * s, q = h * 6, x = c * (1 - Math.abs(q % 2 - 1)), m = l - c / 2, [r, gg, b] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(q) % 6]; return [r + m, gg + m, b + m].map(v => Math.round(v * 255)); }   // the same hue as the body's shade, saturated: its spine
 function shadeOf(g) { const h = hash2(g, 7) / 4294967296, l = 0.5 + 0.22 * (hash2(g, 8) / 4294967296 - 0.5), s = 0.28; const c = (1 - Math.abs(2 * l - 1)) * s, q = h * 6, x = c * (1 - Math.abs(q % 2 - 1)), m = l - c / 2, [r, gg, b] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(q) % 6]; return [r + m, gg + m, b + m].map(v => Math.round(v * 255)); }   // a mass's own shade
 const EK = p => Math.round(p[0] * 2000) + ',' + Math.round(p[1] * 2000) + ',' + Math.round(p[2] * 2000);
 function surfaceOf(w, masses) {
@@ -2340,17 +2342,18 @@ function overhangOf(w, bridge) {
   return { faces: Int32Array.from(faces), red: Uint8Array.from(red), down: r.downTotal, redArea: r.red, bandArea: r.orange, unsupported: r.unsupported, ms: r.ms };
 }
 // what the view shows of a wall besides its stones: the envelope, the layers' faces and the spines
-const viewOf = w => ({ lo: [-w.W / 2, w.y0, 0], hi: [w.W / 2, w.y1, w.H], spines: w.spines, layers: w.layers });
+const viewOf = w => ({ lo: [-w.W / 2, w.y0, 0], hi: [w.W / 2, w.y1, w.H], spines: w.spines, spineRGB: Uint8Array.from(Array.from(w.spineGrp, g => vividOf(g)).flat()), layers: w.layers });
 // the arrays a message hands over, not copies
 const transfers = o => { const out = []; for (const k of ['pos', 'col', 'faceTri', 'lines']) if (o[k]) out.push(o[k].buffer); if (o.cracks) out.push(o.cracks.lines.on.buffer, o.cracks.lines.off.buffer); if (o.report) for (const k of ['D', 'K', 'O', 'AD', 'AK']) out.push(o.report[k].buffer); return out; };
 // ---------- drawing ----------
 const stoneMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true });
+const massMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });   // the masses view: see-through, so the spines show inside
 const edgeMat = new THREE.LineBasicMaterial({ color: 0x2B3340, transparent: true, opacity: 0.45 });
 // the wall from its arrays: its triangles with their colours (lit flat), and the outline lines
-function meshOfBuf(surf, lines) {
+function meshOfBuf(surf, lines, see = false) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(surf.pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(surf.col, 3, true));
-  const grp = new THREE.Group(); grp.add(new THREE.Mesh(g, stoneMat));
+  const grp = new THREE.Group(); grp.add(new THREE.Mesh(g, see ? massMat : stoneMat));
   if (lines) { const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(surf.lines, 3)); grp.add(new THREE.LineSegments(lg, edgeMat)); }
   return grp;
 }
@@ -2676,12 +2679,17 @@ function extras(V, surf = null) {
     const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
     grp.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x3E6FB0, transparent: true, opacity: 0.7 })));
   }
-  if (state.spinesOn) {
-    const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(V.spines, 3));
-    grp.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x1F6F57, depthTest: false })));
-    const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(V.spines, 3));
-    grp.add(new THREE.Points(dg, new THREE.PointsMaterial({ color: 0x1F6F57, size: 4, sizeAttenuation: false, depthTest: false })));
-    for (const o of grp.children.slice(-2)) o.renderOrder = 5;
+  if (state.spinesOn || state.draw === 'masses') {   /* each spine a six-sided tube in its body's colour, saturated; seen through the rocks when they are drawn */
+    const S = V.spines, C = V.spineRGB, n = S.length / 6, r = 0.32, pos = new Float32Array(n * 6 * 18), col = new Uint8Array(n * 6 * 18);
+    let o = 0;
+    for (let q = 0; q < n; q++) {
+      const a = [S[6 * q], S[6 * q + 1], S[6 * q + 2]], b = [S[6 * q + 3], S[6 * q + 4], S[6 * q + 5]], L = len(sub(b, a)); if (L < 1e-6) continue;
+      const d = mul(sub(b, a), 1 / L), p0 = unit(cross(d, Math.abs(d[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0])), p1 = cross(d, p0), R = [];
+      for (let k = 0; k < 6; k++) { const th = TWO_PI * k / 6, c = Math.cos(th) * r, s_ = Math.sin(th) * r; R.push([p0[0] * c + p1[0] * s_, p0[1] * c + p1[1] * s_, p0[2] * c + p1[2] * s_]); }
+      for (let k = 0; k < 6; k++) { const u = R[k], w_ = R[(k + 1) % 6]; for (const [P, Q] of [[a, u], [b, u], [b, w_], [a, u], [b, w_], [a, w_]]) { pos[o] = P[0] + Q[0]; pos[o + 1] = P[1] + Q[1]; pos[o + 2] = P[2] + Q[2]; col[o] = C[3 * q]; col[o + 1] = C[3 * q + 1]; col[o + 2] = C[3 * q + 2]; o += 3; } }
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, o), 3)); g.setAttribute('color', new THREE.BufferAttribute(col.subarray(0, o), 3, true));
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, depthTest: state.draw === 'masses' })); m.renderOrder = 5; grp.add(m);
   }
   // the network's lines on the stones: every line a crack could follow faint, the ones cut strong
   if (state.crackLines && surf && surf.cracks) for (const on of [false, true]) {
@@ -2705,7 +2713,7 @@ onmessage = e => {
   try {
     const t0 = performance.now(), view = (w = build(seed, P, { cells: masses }), viewOf(w)), surf = surfaceOf(w, masses);
     surf.took = performance.now() - t0;
-    postMessage({ id, surf, view }, [...transfers(surf), view.spines.buffer, ...(view.layers ? view.layers.EG.map(g => g.buffer) : [])]);
+    postMessage({ id, surf, view }, [...transfers(surf), view.spines.buffer, view.spineRGB.buffer, ...(view.layers ? view.layers.EG.map(g => g.buffer) : [])]);
   } catch (err) { postMessage({ id, error: String(err && err.stack || err) }); return; }
   if (masses) return;
   try { postMessage({ id, paint: overhangOf(w, P.bridge) }); } catch (err) { postMessage({ id, paintError: String(err && err.stack || err) }); }
@@ -2765,12 +2773,12 @@ function show(e) {
   try {
     shown = e; const { view, surf } = e; tintBevels(surf); if (hlObj) highlightEdge(null); if (selObj) selectStone(null); $('einfo').hidden = true; if (surf.stoneRel && !surf.pieceStone) surf.pieceStone = new Map(surf.stoneRel.map((r, i) => [r[0], i]));
     if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
-    rockObj = meshOfBuf(surf, state.lines); scene.add(rockObj);
+    rockObj = meshOfBuf(surf, state.lines, state.draw === 'masses'); scene.add(rockObj);
     if (extraObj) { scene.remove(extraObj); disposeGroup(extraObj); }
     extraObj = extras(view, surf); scene.add(extraObj);
     placeMini(view);
     draw();
-    $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed;
+    $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed + (state.direction === 'up' ? ' · split by ' + (state.split === 'layers' ? 'layers' : 'spines') : '');
     showStats(view, surf, surf.took);
   } catch (err) { failed(err.message, err); }
 }
