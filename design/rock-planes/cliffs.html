@@ -1383,11 +1383,9 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
     let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (const pc of [P, Q]) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], pc.bb[2 * k]); hi[k] = Math.max(hi[k], pc.bb[2 * k + 1]); }
     initBox(lo[0] - 1, hi[0] + 1, lo[1] - 1, hi[1] + 1, lo[2] - 1, hi[2] + 1);
     clip(jn[0], jn[1], jn[2], dj + D, KIND.SIDE); clip(-jn[0], -jn[1], -jn[2], -(dj - D), KIND.SIDE);
-    // each piece's faces but those facing the join; only a face that reaches the slab can bound the piece inside it
+    // each piece's faces but those facing the join (every one bounds it: a face that misses the slab still cuts its corners off)
     const faces = (pc, sg) => { for (let i = pc.fr[0]; i < pc.fr[1] && !empty; i++) {
       const nx = FN[3 * i], ny = FN[3 * i + 1], nz = FN[3 * i + 2]; if (sg * (nx * jn[0] + ny * jn[1] + nz * jn[2]) > 0.5) continue;
-      let lo_ = Infinity, hi_ = -Infinity; for (let k = 0, p0 = XS[i]; k < FM[i]; k++, p0 += 3) { const t = POS[p0] * jn[0] + POS[p0 + 1] * jn[1] + POS[p0 + 2] * jn[2]; if (t < lo_) lo_ = t; if (t > hi_) hi_ = t; }
-      if (hi_ < dj - D || lo_ > dj + D) continue;
       clip(nx, ny, nz, nx * POS[XS[i]] + ny * POS[XS[i] + 1] + nz * POS[XS[i] + 2], FK[i] < 0 ? KIND.SIDE : FK[i]);
     } };
     faces(P, 1); faces(Q, -1);
