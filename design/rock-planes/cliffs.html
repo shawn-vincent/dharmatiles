@@ -1,9 +1,10 @@
+<meta charset="utf-8">
 <title>Cliffs from Spines</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: one working bench. The viewer on the plate, under it the bar of controls, then a strip of neighbouring seeds, and how it is built reads below. Tokens are the dharmatiles visual system's (Lichen & Linen by day, Moonpool at night). */
+/* Layout: one working bench. The viewer on the plate, under it a strip of neighbouring seeds, and how it is built reads below. Tokens are the dharmatiles visual system's (Lichen & Linen by day, Moonpool at night). */
 :root {
   --f-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
   --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
@@ -38,7 +39,6 @@ body { background: var(--bg); color: var(--ink); font: 14px/20px var(--f-body);
 header { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 28px; }
 h1 { font: 800 34px/1 var(--f-display); letter-spacing: .01em; margin: 0; text-transform: uppercase; }
 .lede { color: var(--muted); margin: 0; max-width: 62ch; }
-.bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); }
 .lbl { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .seg { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); }
 .seg button { height: 26px; padding: 0 10px; border: 0; border-radius: calc(var(--r) - 2px); background: transparent; color: var(--ink); font: 500 13px var(--f-body); cursor: pointer; }
@@ -51,70 +51,60 @@ h1 { font: 800 34px/1 var(--f-display); letter-spacing: .01em; margin: 0; text-t
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .hint { color: var(--muted); font-size: 12px; }
 .main { display: grid; gap: 16px; }
-/* the settings: one line of values, each opened in place (a box to type in and a slider in a popover under it) */
-.params { gap: 6px 4px; padding: 6px 8px; }
-.pc { position: relative; display: inline-flex; align-items: center; }
-.pv { display: inline-flex; align-items: baseline; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r); background: none; color: var(--ink); font: 500 14px var(--f-body); cursor: pointer; align-items: center; }
-.pv .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-.pv .v { font: 600 14px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); border-bottom: 1px dashed var(--line-2); padding-bottom: 1px; }
-.pv:hover { border-color: var(--line-2); background: var(--raised); }
-.pv:hover .v { border-bottom-color: var(--accent); }
-.pv.tool { color: var(--muted); padding: 0 7px; }
-.pv.tool:hover { color: var(--accent); }
-#reset { margin-left: auto; }
-/* the bar is one line of icons and values, between the viewer and the seeds */
-.params { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-.params::-webkit-scrollbar { display: none; }
 .ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.pv .ic { color: var(--muted); }
-.pv:hover .ic, .pc.open .pv .ic { color: var(--ink); }
 .ic.dir { width: 24px; }
 .ic .faint { stroke-width: 1; opacity: .5; }
 .ic .hid { stroke-width: 1; opacity: .3; stroke-dasharray: 1.5 1.5; }
 .ic .plane { fill: currentColor; fill-opacity: .45; stroke-width: 1.8; }
-.pv .v { white-space: nowrap; }
-.sheethead b { display: inline-flex; align-items: center; gap: 8px; }
-.sheethead b .ic { color: var(--ink); }
-.pc.open .pv { border-color: var(--accent); background: var(--raised); }
 .pbox.rng { width: 11ch; }
 .pbox { width: 6ch; height: 22px; padding: 0 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg); color: var(--ink); font: 600 14px var(--f-code); text-align: right; }
-.pop { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 20; width: min(760px, 100vw); max-height: 55vh; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 8px; align-content: start; padding: 0 16px max(16px, env(safe-area-inset-bottom)); background: var(--panel); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 32px -12px rgb(26 23 20 / .55); }
-.sheethead { grid-column: 1 / -1; position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; padding: 12px 0 8px; background: var(--panel); border-bottom: 1px solid var(--line); }
-.sheethead b { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.sheethead button { height: 28px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 500 13px var(--f-body); cursor: pointer; }
-.sheethead button:hover { border-color: var(--accent); color: var(--accent); }
-.pop small { color: var(--muted); font-size: 12px; line-height: 16px; }
-.pop .ends { display: flex; justify-content: space-between; color: var(--muted); font: 12px var(--f-code); }
-.shapeicon { width: 34px; height: 34px; border-radius: var(--r); background: var(--plate); display: block; }
-.pv.shape { height: 42px; padding: 0 6px 0 10px; }
-.shapes { width: min(560px, calc(100vw - 48px)); grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
-.shapes button { display: grid; justify-items: center; gap: 3px; padding: 5px 2px; border: 1px solid transparent; border-radius: var(--r); background: none; color: var(--ink); font: 500 11px/13px var(--f-body); cursor: pointer; text-align: center; }
-.shapes button img, .shapes button .dice { width: 60px; height: 60px; border-radius: var(--r); background: var(--plate); }
-.shapes button:hover { border-color: var(--line-2); background: var(--raised); }
-.shapes button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-.pv .sep { color: var(--muted); margin: 0 4px; }
-.pop.group { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px 28px; }
+/* the settings: the corner code opens a bottom sheet over the view; its top level lists the settings, a row slides to its page */
+.code { position: absolute; left: 10px; bottom: 10px; z-index: 3; display: block; padding: 0; border: 0; border-radius: 0; background: #fff; cursor: pointer; line-height: 0; box-shadow: 0 0 0 1px rgb(26 23 20 / .25); }
+.code svg { display: block; shape-rendering: crispEdges; }
+.code:hover, .code:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; margin-inline: auto; z-index: 5; width: min(760px, 100%); max-height: 70%; display: flex; flex-direction: column; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 32px -12px rgb(26 23 20 / .55); visibility: hidden; transform: translateY(100%); transition: transform .2s ease, visibility 0s .2s; }
+.sheet.open { visibility: visible; transform: none; transition: transform .2s ease; }
+.slides { display: flex; width: 200%; flex: 1 1 auto; min-height: 0; transition: transform .2s ease; }
+.slides.deep { transform: translateX(-50%); }
+.pg { width: 50%; overflow-y: auto; overscroll-behavior: contain; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+.shead { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.shead b { flex: 1; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.shead b .ic { color: var(--ink); }
+.shead .btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 6px; }
+.shead .said { font-size: 12px; color: var(--ok); }
+.srow { display: grid; grid-template-columns: 24px 1fr auto 14px; align-items: center; gap: 10px; width: 100%; min-height: 46px; padding: 6px 14px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font: 500 14px var(--f-body); text-align: left; cursor: pointer; }
+.srow:hover { background: var(--raised); }
+.srow .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.srow .v { font: 600 14px var(--f-code); color: var(--accent); white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.srow .chev { color: var(--muted); }
+.srow .ic { color: var(--muted); }
+.codebox { display: grid; gap: 8px; padding: 14px 14px 0; }
+.codefield { width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg); color: var(--ink); font: 13px var(--f-code); }
+.codebox small, .group-rows small, .styles small { color: var(--muted); font-size: 12px; line-height: 16px; }
+.codebox .codeerr { color: var(--err); font-weight: 600; }
+.qr { width: min(240px, 100%); background: #fff; padding: 0; line-height: 0; border: 1px solid var(--line); }
+.qr svg { width: 100%; height: auto; display: block; shape-rendering: crispEdges; }
+.group-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px 28px; padding: 14px; align-content: start; }
+.group-rows .ends { display: flex; justify-content: space-between; color: var(--muted); font: 12px var(--f-code); }
+.styles, .seedpage { display: grid; gap: 8px; padding: 14px; }
+.styles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.seedpage .seedrow { display: flex; gap: 8px; align-items: center; }
 .prow { display: grid; gap: 6px; }
 .pbool { grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; cursor: pointer; }
 .pbool small { grid-column: 1 / -1; }
 .pbool .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .phead { display: flex; justify-content: space-between; align-items: center; }
 .phead .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-.styles { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .styles .note { grid-column: 1 / -1; }
 .seg .ic { width: 30px; height: 25px; margin-right: 6px; }
 .seg button.withicon { height: 34px; display: inline-flex; align-items: center; }
-.spec textarea { width: 100%; min-height: 220px; resize: vertical; padding: 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg); color: var(--ink); font: 12px/16px var(--f-code); }
-.spec .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.spec .acts button { height: 28px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--raised); color: var(--ink); font: 500 13px var(--f-body); cursor: pointer; }
-.spec .acts button:hover { border-color: var(--accent); color: var(--accent); }
 .styles button { display: grid; gap: 2px; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--r); background: none; color: var(--ink); cursor: pointer; font: 500 14px var(--f-body); }
 .styles button small { color: var(--muted); }
 .styles button:hover { border-color: var(--line-2); background: var(--raised); }
 .styles button[aria-pressed="true"] { border-color: var(--accent); }
 .styles .note { color: var(--muted); }
 .stage { display: grid; gap: 10px; min-width: 0; }
-.einfo { position: absolute; left: 12px; bottom: 12px; max-width: min(440px, calc(100% - 80px)); z-index: 3; background: #fff; color: #1b1f22; border: 1px solid #c9d0da; border-radius: 8px; padding: 10px 12px; font: 13px/1.45 var(--sans, system-ui); box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+.einfo { position: absolute; left: 12px; bottom: 92px; max-width: min(440px, calc(100% - 80px)); z-index: 3; background: #fff; color: #1b1f22; border: 1px solid #c9d0da; border-radius: 8px; padding: 10px 12px; font: 13px/1.45 var(--sans, system-ui); box-shadow: 0 4px 16px rgba(0,0,0,.18); }
 .einfo b { font-weight: 650; } .einfo a.slink { color: #0a58ca; text-decoration: underline; cursor: pointer; } .einfo .why { margin-top: 4px; } .einfo .dim { color: #5c6670; font-size: 12px; margin-bottom: 4px; }
 .viewer.max { position: fixed; inset: 0; height: 100dvh; min-height: 0; border-radius: 0; border: 0; z-index: 1000; }
 body.vmax { overflow: hidden; }
@@ -189,7 +179,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
 .how code { font: 13px var(--f-code); background: var(--panel); padding: 0 4px; border-radius: 3px; }
 .err { color: var(--err); font-weight: 600; }
 @media (max-width: 860px) {
-  .pv { padding: 0 4px; gap: 4px; } .pv.tool { padding: 0 4px; } .params { gap: 0; padding: 4px 2px; }
   .main { grid-template-columns: minmax(0, 1fr); }
   .viewer { height: 380px; }
   .strip { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -218,6 +207,26 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
           <button class="vbtn" id="zfit" aria-label="Zoom to fit" title="Zoom to fit"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg></button>
           <button class="vbtn" id="zout" aria-label="Zoom out" title="Zoom out"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M7.5 10.5h6"/></svg></button>
         </div>
+        <button class="code" id="code" aria-haspopup="dialog" aria-controls="sheet"></button>
+        <div class="sheet" id="sheet" role="dialog" aria-label="Settings" inert>
+          <div class="slides" id="slides">
+            <section class="pg" id="pgTop" aria-label="Settings">
+              <div class="shead"><b>Settings</b><span class="said" id="said" role="status"></span>
+                <button class="btn" id="sreset" title="Reset: every setting back to the style's" aria-label="Reset every setting"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"/></svg></button>
+                <button class="btn" id="scopy" title="Copy the settings code" aria-label="Copy the settings code"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                <button class="btn" id="sclose" title="Close" aria-label="Close"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19"/></svg></button>
+              </div>
+              <div id="srows"></div>
+              <div class="codebox">
+                <span class="lbl">Code</span>
+                <input class="codefield" id="codefield" type="text" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Settings code: paste one and press Enter to load it">
+                <small class="codeerr" id="codeerr" role="alert"></small>
+                <div class="qr" id="qr" aria-label="The settings code as a QR code"></div>
+              </div>
+            </section>
+            <section class="pg" id="pgDetail"></section>
+          </div>
+        </div>
         <div class="vpanel" id="vpanel" hidden>
           <span class="lbl">Projection</span>
           <div class="seg" id="view" role="group" aria-label="Projection">
@@ -236,10 +245,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
             <label><input type="checkbox" id="mini" checked> The miniature</label>
           </div>
         </div>
-      </div>
-      <div class="bar params" id="params" role="toolbar" aria-label="Settings">
-        <button class="pv tool" id="reset" title="Reset: put every setting back" aria-label="Reset every setting"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"/></svg></button>
-        <span class="pc"><button class="pv tool" id="spec" aria-haspopup="dialog" title="Spec: copy everything on screen as text, or load pasted text" aria-label="Spec: copy or load the settings as text"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></span>
       </div>
       <div class="carousel" role="group" aria-label="Seeds">
         <button class="btn arrow" id="prev" aria-label="Previous seed">&#8592;</button>
@@ -262,16 +267,18 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Bodies.</b> A spine that runs through several layers is one stone, carved whole. <b>Fuse</b> joins two neighbouring spines whose cells share a face into one body, one draw for each two from a stream of the pair&rsquo;s own; a cell narrower than 3 mm across joins the neighbour it shares the most side face with. A body is carved cell by cell with the faces where its cells meet kept flat, so the slicer fuses them into one stone; a body that rests on nothing the ground holds is joined to a touching body that is held.</li>
       <li><b>The bottom.</b> A cell finds what holds it before it is carved: the places where its bottom meets the tops of the cells below (any stone placed before it: the stones are placed holders first, and a stone can hold another only when its spine ends below the middle of the other&rsquo;s and starts lower, so a neighbour beside it never holds it and one it overlaps deeply does), each made a patch. Each patch is inset by the bevel&rsquo;s width (the high end of <b>Bevel</b>), so a stone rests on what its bevels leave; an overlap too small to keep <span data-const="MINSUP"></span> mm&sup2; that way is shrunk about its centre to <span data-const="MINSUP"></span> mm&sup2; instead, and a stone keeps the whole overlap with a stone of its own body. A holder's patch is where the bottom lies within reach of its top or sunk into it, at any depth. Laying the bottom moves it, so what touches it is found again against the laid bottom and the bottom laid again, until it stays (at most three times). Patches join the bottom from the largest down, each while the hull of those kept is still covered by the patches and the hulls of pairs that span at most Bridge (a patch that cannot join as it is is trimmed toward them and tried again; one under <span data-const="MINBR"></span> mm&sup2; is no end of a bridge). Its <b>bottom</b> is those patches, and every point of it either rests on one or lies on a line between two patches at most <b>Bridge</b> apart (less <span data-const="BRIDGE_MARGIN"></span> mm, so the plan sits inside the measure). The bottom is laid across its holders and may pass into a stone below that does not hold it: the stones print as one solid, so nothing hangs where they overlap. A stone with no holder is lowered to the nearest top below, or stands on the ground when it is near the plate. A <b>flare</b> rises from the bottom&rsquo;s outline at <span data-const="FLARE_DEG"></span>&deg; from upright, so what lies past a patch is cut away rather than overhanging. Where a stone holds another, its top keeps flat the hull of the patches the stones above rest on, and its fuzzy top is never below its holders&rsquo; tops. Every stone rests on the ground or on a stone that does.</li>
       <li><b>Rocks.</b> Each cell is carved alone, by the same rules whatever the style: the stone is its cell, and every edge that will be seen (two faces turning at least <span data-const="BEV_FLAT"></span>&deg;, a point just outside it in no other stone) gets one flat bevel, cut the same distance in on both faces, so at the middle angle between them: <b>Bevel</b> wide (drawn between its two ends at each end of the edge), at most <span data-const="BEV_INR%"></span> of the narrower face&rsquo;s inradius, longest edges first. The bottom, the flat tops under stones above, and the faces where a body&rsquo;s cells meet are kept as they are; no plane is made that faces down past <span data-const="OVER"></span>&deg;, so every overhang left is the bottom&rsquo;s own, and a bevel that would cut what is kept is moved out to it, or not made if less than a third of a nozzle is left. A stone stays inside its cell, so with Joint at zero or more stones never overlap and under zero they overlap. The stones are left as separate shells, not joined: the slicer fuses them. Draw shows the rocks, or the <b>structure</b>: the cells as cut, before carving, each body its own shade, as frosted glass, with the spines and the layer faces. <b>Weathering</b> then cuts each stone by an egg of its own shape, just holding the stone at 0% and just inside it at 100%, so corners go first, then edges, then the faces dome; what a stone rests on or carries, and the downward limit, hold it back.</li>
-      <li><b>Cracks</b> (each style sets its own: Granite 12.5% on a Blocks network, Columns 19.5% on a Columns network, Layered 90% on a Planes network, Fieldstone none, Ashlar 15%; under Rocks, whose sheet shows the other crack settings only while Cracks is above 0%) follow one hidden <b>Network</b> over the whole cliff: a table of flat boundaries between cells of seeds on a grid, in one, two or three axes: <b>Planes</b> across the vertical (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread, and each boundary carrying the rank at which a crack would reach it (cracks start at even shares and grow from line to line, turning least, branching with the chance <b>Branching</b>, <span data-const="CRACK_LINES"></span> lines to a crack on average). The table is made once for each Network, Spacing and Branching (the first wall that needs one waits for it) and the wall takes it at a seeded offset. Where a boundary crosses a stone&rsquo;s upright or upward faces it is a trace; <b>Cracks</b> picks each stone&rsquo;s own share of its traces&rsquo; length, in rank order, so raising it only adds cracks, and a crack never runs from one stone into another. A boundary a face meets at less than <span data-const="GRAZE"></span>&deg; (it would take off a skin) takes none. A trace is walked in short steps (<b>Wiggle</b>: each step <span data-const="WIGGLE_STEP"></span> mm, its heading turned by up to this share of <span data-const="WIGGLE_TURN"></span>&deg; and kept within the share, so a crack meanders), and cut as a groove of one V: two walls that meet in a sharp line, each <span data-const="GROOVE"></span>&deg; off the face&rsquo;s inward normal, <b>Opening</b> apart at the face (at most <span data-const="OPENING_MOST"></span> mm), so on an upright face its roof faces down at the overhang target whichever way the crack runs, and a wall that would face down past it is turned up to it. A free end tapers to nothing, its depth falling 1 in <span data-const="TAPER"></span>; an end that meets another crack, or the stone&rsquo;s outline where it touches another stone or the ground, runs off at full size; and a stretch that holds a stone above or lies on a bottom is left whole. Each face the grooves touch is cut in its own plane into the convex pieces outside them, and merged back to as few as keep it convex. The faces inside a crack are drawn dark grey.</li>
+      <li><b>Cracks</b> (each style sets its own: Granite 12.5% on a Blocks network, Columns 19.5% on a Columns network, Layered 90% on a Planes network, Fieldstone none, Ashlar 15%; under Rocks, whose page in the settings sheet shows the other crack settings only while Cracks is above 0%) follow one hidden <b>Network</b> over the whole cliff: a table of flat boundaries between cells of seeds on a grid, in one, two or three axes: <b>Planes</b> across the vertical (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread, and each boundary carrying the rank at which a crack would reach it (cracks start at even shares and grow from line to line, turning least, branching with the chance <b>Branching</b>, <span data-const="CRACK_LINES"></span> lines to a crack on average). The table is made once for each Network, Spacing and Branching (the first wall that needs one waits for it) and the wall takes it at a seeded offset. Where a boundary crosses a stone&rsquo;s upright or upward faces it is a trace; <b>Cracks</b> picks each stone&rsquo;s own share of its traces&rsquo; length, in rank order, so raising it only adds cracks, and a crack never runs from one stone into another. A boundary a face meets at less than <span data-const="GRAZE"></span>&deg; (it would take off a skin) takes none. A trace is walked in short steps (<b>Wiggle</b>: each step <span data-const="WIGGLE_STEP"></span> mm, its heading turned by up to this share of <span data-const="WIGGLE_TURN"></span>&deg; and kept within the share, so a crack meanders), and cut as a groove of one V: two walls that meet in a sharp line, each <span data-const="GROOVE"></span>&deg; off the face&rsquo;s inward normal, <b>Opening</b> apart at the face (at most <span data-const="OPENING_MOST"></span> mm), so on an upright face its roof faces down at the overhang target whichever way the crack runs, and a wall that would face down past it is turned up to it. A free end tapers to nothing, its depth falling 1 in <span data-const="TAPER"></span>; an end that meets another crack, or the stone&rsquo;s outline where it touches another stone or the ground, runs off at full size; and a stretch that holds a stone above or lies on a bottom is left whole. Each face the grooves touch is cut in its own plane into the convex pieces outside them, and merged back to as few as keep it convex. The faces inside a crack are drawn dark grey.</li>
       <li><b>Overhang is painted after the wall is shown.</b> The wall appears as soon as it is built; a pass over the finished stones then marks every downward face past <span data-const="OVER"></span>&deg; that is not held, and the page paints it orange (55 to 65&deg;) or red (past 65&deg;), and reports each share of the downward area and the area unsupported. A downward face is held where another stone lies under it (within 0.2 mm), or on a line between two held places of its own stone at most Bridge apart; the ground holds what touches it. A face is painted whole when any of it is unheld. Each of orange and red may be 0.1% of the downward area. Red and orange on a model mean overhang only; the inside of a crack is dark grey.</li>
     </ol>
     <p class="hint"><b>Layered</b>: thirty-eight thin level layers, a handful of slabs in each, the joints staggered, with cracks along Planes. <b>Granite</b>: Direction Through, one layer: every spine runs from the back to the front, and the stones show their ends; Joint under zero, so they overlap into one irregular mass; cracks along Blocks. <b>Columns</b>: one layer, the full height, so every spine is one upright column from a point on the ground, a hair apart; cracks along Columns. <b>Fieldstone</b>: eighteen rough courses, the stones thrown at random (Order 0%), many-faced and tilted so they read round; Span 30% lets a stone run up through the next course; no cracks. <b>Ashlar</b>: eight level courses, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone; cracks along Blocks.</p>
+    <p class="hint"><b>The settings code</b> is the small QR in the corner of the view, and opens the settings sheet: a row for the style, the seed and each group, each opening its page, and under them the code as text (with the camera) to copy, paste into or edit, and as a large QR. One code holds every setting that differs from its style, the seed and optionally the view; its last character checks it, and a code made by another version of this page is refused.</p>
     <p class="hint">Not here yet: envelopes with concavities and holes (each cell is clipped by a box envelope), curved or irregular ends, twisting sections, erosion, seams between stones, and two networks at once. A cell is a convex region, so a stone is convex before its cracks.</p>
     <p class="hint">The glassy figure at the front left, for scale, is <a href="https://www.printables.com/model/77914-fighter-female-no-supports-needed">Fighter - Female</a> by Teirale, a 28 mm miniature on a 25 mm base (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), with fewer triangles.</p>
   </section>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
 "use strict";
@@ -2359,11 +2366,12 @@ function showValue(out, input, unit) {
   out.innerHTML = `<span class="ip" style="min-width:${digits}ch">${ip}</span><span class="fp" style="width:${places ? places + 1 : 0}ch">${fp ? '.' + fp : ''}</span>${unit ? `<span class="un">${unit}</span>` : ''}`;
 }
 const MM = '&nbsp;mm';
-// the bar's icons (each also heads its sheet)
+// the settings' icons (each also heads its page in the sheet)
 const svg = (body, cls = '', vb = '0 0 24 24') => `<svg class="ic ${cls}" viewBox="${vb}" aria-hidden="true">${body}</svg>`;
 const ICON = {
   style: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>'),
   envelope: svg('<path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/>'),
+  seed: svg('<path d="M9 4 7 20M17 4l-2 16M4.5 9h16M3.5 15h16"/>'),
   rocks: svg('<path d="M3.5 16.5 2.5 10l5-5.5 6.5-1.5 5.5 4 2.5 6.5-3 4.5-8.5 1.5z"/><path class="faint" d="M7.5 4.5 9 11l-6.5-1M9 11l6-3.5 6.5 6M9 11l1.5 8.5"/>'),
 };
 // a direction's picture: the envelope as a box (seen from the front, above and to the right) with a layer's plane across it
@@ -2376,8 +2384,12 @@ function dirIcon(d) {
 }
 const P_ = (key, label, min, max, step, unit, help) => ({ key, label, min, max, step, unit, help });
 const R_ = (...a) => ({ ...P_(...a), range: true });   // a range: drawn at random between its two ends
-// the settings, in groups on one line: a group shows its first value; a click opens its settings under it
+/* the settings, in groups: the sheet's top level is one row for each group, showing its value setting; a row opens its page. A setting with own has no preset: the code always holds it */
 const GROUPS = [
+  { label: 'Style', icon: () => ICON.style, value: 'style', page: 'style', note: () => edited() ? ' (edited)' : '', items: [
+    { key: 'style', label: 'Style', own: true, choices: STYLES.filter(s => PRESETS[s[0]]).map(s => [s[0], s[1]]) }] },
+  { label: 'Seed', icon: () => ICON.seed, value: 'seed', page: 'seed', items: [
+    { key: 'seed', label: 'Seed', own: true, min: 0, max: 1048575, step: 1, unit: '' }] },
   { label: 'Envelope', icon: () => ICON.envelope, value: 'squares', items: [
     P_('squares', 'Squares', 1, 3, 1, '', 'How many 35 mm squares long the wall is.'),
     R_('height', 'Height', 6, 80, 0.1, MM, 'How tall each stone reaches: drawn in this range, mostly from a smooth field along the wall, so neighbours stop at similar heights and the top wanders. The envelope is as tall as the high end.'),
@@ -2415,6 +2427,81 @@ const ENGINE_KEYS = [...new Set([...CLIFF_KEYS, ...ROCK_KEYS])];
 const pick = keys => Object.fromEntries(keys.map(k => [k, state[k]]));
 const same = (a, b) => String(a) === String(b);   // a range is compared by its ends
 const edited = () => Object.keys(PRESETS[state.style]).some(k => !same(state[k], PRESETS[state.style][k]));
+// ---------- settings code ----------
+/* What is outside GROUPS' presets: the view part of a code (draw, projection) and its camera, each declared here as a small table */
+const VIEW = [{ key: 'draw', choices: ['rocks', 'structure'] }, { key: 'view', choices: ['persp', 'ortho'] }];
+const CAMERA = { step: 0.1, bits: 16 };
+const snapTo = (p, x) => +Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min)).toFixed(4);
+/* One code for a configuration. encode and decode read GROUPS (key, min, max, step, choices, in order), PRESETS and VIEW, so a new setting needs no change here.
+   The bits, most significant first: a flag (a view part follows), the 8-bit fingerprint, each setting with no preset (style, seed) as its index, one bit for every other
+   setting (changed from the style's preset), each changed setting's index (a range: both ends) in as many bits as its steps need, then with the flag the view part
+   (VIEW's choices, then the camera and its target at CAMERA.step in CAMERA.bits each). The bits are written in Crockford base32, grouped by four, with a check character
+   at the end. The fingerprint is a hash of the schema (GROUPS' keys, min, max, step and choices in order) and the PRESETS values, and it is the only version the format has:
+   a code made by a page whose fingerprint differs is refused in words (that page's version is in git and decodes it). */
+const SETTINGS = GROUPS.flatMap(g => g.items);
+const GROUP_SEED = SETTINGS.find(p => p.key === 'seed');
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const CODE_FP = (() => {
+  const s = JSON.stringify([SETTINGS.map(p => [p.key, p.range ? 1 : 0, p.own ? 1 : 0, p.min, p.max, p.step, p.choices && p.choices.map(c => c[0])]), PRESETS, SETTINGS.filter(p => !p.own && PRESETS.layered[p.key] === undefined).map(p => DEFAULTS[p.key]), VIEW, CAMERA]);
+  let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  h ^= h >>> 16; h ^= h >>> 8; return h & 255;
+})();
+const stepsOf = p => p.choices ? p.choices.length : Math.round((p.max - p.min) / p.step) + 1;
+const widthOf = n => n <= 1 ? 0 : 32 - Math.clz32(n - 1);   /* bits to hold 0 to n - 1 */
+const indexOf = (p, v) => { if (!p.choices) return Math.min(stepsOf(p) - 1, Math.max(0, Math.round((v - p.min) / p.step))); const i = p.choices.findIndex(c => c[0] === v); if (i < 0) throw new Error(`${p.label} is '${v}', which is not one of its choices`); return i; };
+const valueOf = (p, i) => p.choices ? p.choices[i][0] : +(p.min + i * p.step).toFixed(4);
+const baseOf = (p, style) => PRESETS[style][p.key] !== undefined ? PRESETS[style][p.key] : DEFAULTS[p.key];
+const ends = (p, v) => p.range ? v : [v];
+const checkChar = digits => digits.reduce((s, d, i) => s + d * (2 * i + 1), 0) % 32;   /* odd weights: any one misread character changes it */
+const eyeNow = () => ({ position: [camera.position.x, camera.position.y, camera.position.z], target: [controls.target.x, controls.target.y, controls.target.z] });
+function encode(st, opts = {}) {
+  const bits = [], put = (v, n) => { for (let i = n - 1; i >= 0; i--) bits.push(Math.floor(v / 2 ** i) % 2); };
+  put(opts.camera ? 1 : 0, 1); put(CODE_FP, 8);
+  for (const p of SETTINGS) if (p.own) put(indexOf(p, st[p.key]), widthOf(stepsOf(p)));
+  const rest = SETTINGS.filter(p => !p.own), changed = rest.filter(p => String(st[p.key]) !== String(baseOf(p, st.style)));
+  for (const p of rest) put(changed.includes(p) ? 1 : 0, 1);
+  for (const p of changed) for (const v of ends(p, st[p.key])) put(indexOf(p, v), widthOf(stepsOf(p)));
+  if (opts.camera) {
+    for (const v of VIEW) put(v.choices.indexOf(st[v.key]), widthOf(v.choices.length));
+    const e = eyeNow(), top = 2 ** CAMERA.bits - 1;
+    for (const n of [...e.position, ...e.target]) put(Math.min(top, Math.max(0, Math.round(n / CAMERA.step) + 2 ** (CAMERA.bits - 1))), CAMERA.bits);
+  }
+  while (bits.length % 5) bits.push(0);
+  const digits = []; for (let i = 0; i < bits.length; i += 5) digits.push(bits.slice(i, i + 5).reduce((a, b) => a * 2 + b, 0));
+  digits.push(checkChar(digits));
+  return digits.map(d => CROCKFORD[d]).join('').replace(/(.{4})(?=.)/g, '$1-');
+}
+/* the settings (every GROUPS key) and, when the code has a view part, { draw, view, position, target }; an error says what is wrong in words */
+function decode(text) {
+  const raw = String(text).replace(/[\s-]+/g, '').toUpperCase().replace(/[IL]/g, '1').replace(/O/g, '0');
+  const digits = [...raw].map(c => { const d = CROCKFORD.indexOf(c); if (d < 0) throw new Error(`'${c}' is not a character of a settings code`); return d; });
+  if (digits.length < 4) throw new Error('too short to be a settings code');
+  const check = digits.pop();
+  if (checkChar(digits) !== check) throw new Error('the check character does not match: a character was misread, lost or added');
+  const bits = digits.flatMap(d => [4, 3, 2, 1, 0].map(i => (d >> i) & 1)); let at = 0;
+  const take = n => { if (at + n > bits.length) throw new Error('the code is cut short'); let v = 0; for (let i = 0; i < n; i++) v = v * 2 + bits[at++]; return v; };
+  const withView = take(1) === 1, fp = take(8);
+  if (fp !== CODE_FP) throw new Error(`made by another version of this page (fingerprint ${fp.toString(16).toUpperCase().padStart(2, '0')})`);
+  const values = {}, at_ = (p, n) => { const i = take(widthOf(n)); if (i >= n) throw new Error(`${p.label} is out of range`); return valueOf(p, i); };
+  for (const p of SETTINGS) if (p.own) values[p.key] = at_(p, stepsOf(p));
+  const rest = SETTINGS.filter(p => !p.own), mask = rest.map(() => take(1));
+  rest.forEach((p, k) => {
+    if (!mask[k]) { const b = baseOf(p, values.style); values[p.key] = p.range ? [...b] : b; return; }
+    const v = Array.from({ length: p.range ? 2 : 1 }, () => at_(p, stepsOf(p)));
+    if (p.range && v[0] > v[1]) throw new Error(`${p.label} has its low end past its high end`);
+    values[p.key] = p.range ? v : v[0];
+  });
+  let view = null;
+  if (withView) {
+    view = {};
+    for (const v of VIEW) { const i = take(widthOf(v.choices.length)); if (i >= v.choices.length) throw new Error(`${v.key} is out of range`); view[v.key] = v.choices[i]; }
+    const n = Array.from({ length: 6 }, () => +((take(CAMERA.bits) - 2 ** (CAMERA.bits - 1)) * CAMERA.step).toFixed(4));
+    view.position = n.slice(0, 3); view.target = n.slice(3);
+  }
+  if (bits.length - at >= 5) throw new Error('the code holds more than this page reads');
+  return { values, view };
+}
+// ---------- end of settings code ----------
 
 const viewerEl = $('viewer');
 // ---------- the glass: the structure view ----------
@@ -2538,7 +2625,7 @@ function initGL() {
     ME = i; selectStone(i); highlightEdge(null); $('einfo').innerHTML = stoneWords(i);
   });
   controls.target.copy(focus()); controls.enablePan = true; controls.minDistance = 20; controls.maxDistance = 600;
-  controls.addEventListener('change', draw); controls.update();
+  controls.addEventListener('change', draw); controls.addEventListener('change', fieldSync); controls.update();
   // a scroll over the view scrolls the page; only a pinch zooms (on a trackpad a pinch comes as a wheel event with Ctrl held)
   viewerEl.addEventListener('wheel', e => { if (!e.ctrlKey) e.stopPropagation(); }, { capture: true });
   new ResizeObserver(resize).observe(viewerEl); resize();
@@ -2810,19 +2897,10 @@ function rebuildThumbs() {
 }
 
 // controls
-// a bottom sheet's head: its name and Done
-const sheetHead = (label, icon = '') => { const h = document.createElement('div'); h.className = 'sheethead'; h.innerHTML = `<b>${icon}${label}</b>`; const b = document.createElement('button'); b.textContent = 'Done'; b.addEventListener('click', () => closePop(true)); h.append(b); return h; };
-// one popover open at a time; a click elsewhere or Escape closes it (Escape puts the values back)
-let openPop = null;
-function closePop(keep = true) { if (openPop) { const c = openPop; openPop = null; c(keep); } }
-document.addEventListener('pointerdown', e => { if (openPop && !e.target.closest('.pc.open, .pop')) closePop(true); });   // a tap off the chip and its sheet closes it
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && openPop) closePop(false); });   // Escape puts the values back, wherever focus is
-const bar = $('params'), resetBtn = $('reset');
-// a direction's picture: the wall, seen from the front and a little above, and the way its spines run
+// a setting's value as HTML
 const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.range) return rangeText(v) + (p.unit || ''); if (p.choices) { const c = p.choices.find(x => x[0] === v); return (p.icon ? p.icon(v) : '') + c[1]; } const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
-const snapTo = (p, x) => +Math.min(p.max, Math.max(p.min, Math.round((x - p.min) / p.step) * p.step + p.min)).toFixed(4);
-// one setting's row in a popover: a box to type in, its slider and its help
-function row(p, box) {
+// one setting's row in a page of the sheet: a box to type in, its slider and its help
+function row(p) {
   if (p.choices) {   // a choice: a button for each, and its help
     const wrap = document.createElement('div'); wrap.className = 'prow';
     wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`);
@@ -2842,28 +2920,28 @@ function row(p, box) {
     wrap.append(cb); wrap.insertAdjacentHTML('beforeend', `<span class="k">${p.label}</span><small>${p.help}</small>`);
     return wrap;
   }
-  if (p.range) return twinRow(p, box);
+  if (p.range) return twinRow(p);
   const wrap = document.createElement('div'); wrap.className = 'prow';
-  if (!box) { box = document.createElement('input'); Object.assign(box, { type: 'text', inputMode: 'decimal', value: state[p.key], className: 'pbox' }); box.setAttribute('aria-label', p.label); wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`); wrap.firstChild.append(box); }
+  const box = document.createElement('input'); Object.assign(box, { type: 'text', inputMode: 'decimal', value: state[p.key], className: 'pbox' }); box.setAttribute('aria-label', p.label); wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`); wrap.firstChild.append(box);
   const set = x => { x = snapTo(p, x); if (x !== state[p.key]) { state[p.key] = x; update(); } };
   const sl = slider(p, () => [state[p.key]], ([x]) => { set(x); box.value = state[p.key]; });
   box.addEventListener('input', () => { const x = parseFloat(box.value); if (Number.isFinite(x)) { set(x); sl.paint(); } });
   wrap.append(sl.el);
   wrap.insertAdjacentHTML('beforeend', `<div class="ends"><span>${fmt(p, p.min)}</span><span>${fmt(p, p.max)}</span></div><small>${p.help}</small>`);
-  for (const el of [box, ...sl.keys]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') closePop(true); if (e.key === 'Escape') closePop(false); });
+  for (const el of [box, ...sl.keys]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') box.blur(); });
   return wrap;
 }
 // a range's row: a box to type lo..hi in, its slider, and its help
-function twinRow(p, box) {
+function twinRow(p) {
   const wrap = document.createElement('div'); wrap.className = 'prow';
-  if (!box) { box = document.createElement('input'); Object.assign(box, { type: 'text', value: rangeText(state[p.key]), className: 'pbox rng' }); box.setAttribute('aria-label', p.label + ', low..high'); wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`); wrap.firstChild.append(box); }
+  const box = document.createElement('input'); Object.assign(box, { type: 'text', value: rangeText(state[p.key]), className: 'pbox rng' }); box.setAttribute('aria-label', p.label + ', low..high'); wrap.insertAdjacentHTML('beforeend', `<div class="phead"><span class="k">${p.label}</span></div>`); wrap.firstChild.append(box);
   const set = v => { if (!same(v, state[p.key])) { state[p.key] = v; update(); } };
   const sl = slider(p, () => state[p.key], v => { set(v); box.value = rangeText(state[p.key]); });
   box.addEventListener('input', () => { const v = parseRange(box.value); if (v) { set(v.map(x => snapTo(p, x))); sl.paint(); } });
   box.addEventListener('change', () => { box.value = rangeText(state[p.key]); });   // the box shows the one spelling: 7 when both ends are 7
   wrap.append(sl.el);
   wrap.insertAdjacentHTML('beforeend', `<div class="ends"><span>${p.min}${p.unit || ''}</span><span>${p.max}${p.unit || ''}</span></div><small>${p.help}</small>`);
-  for (const el of [box, ...sl.keys]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') closePop(true); if (e.key === 'Escape') closePop(false); });
+  for (const el of [box, ...sl.keys]) el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') box.blur(); });
   return wrap;
 }
 // a setting's slider, for a number (get gives [value]) or a range ([low, high]): { el, paint, keys }. Each end's handle is dragged
@@ -2914,110 +2992,127 @@ function slider(p, get, put) {
   paint();
   return { el, paint, keys: grip ? [...ends, grip] : ends };
 }
-function groupChip(g) {
-  const pc = document.createElement('span'); pc.className = 'pc';
-  const btn = document.createElement('button'); btn.className = 'pv'; btn.setAttribute('aria-haspopup', 'dialog');
-  btn.innerHTML = `<span class="gi"></span><span class="v"></span>`; btn.title = g.label;
-  pc.append(btn); bar.insertBefore(pc, resetBtn);
-  const lone = g.items.length === 1;
-  // the chip shows the group's first value; the popover has them all
-  const show = () => { btn.querySelector('.gi').outerHTML = g.icon().replace('class="ic', 'class="gi ic'); btn.querySelector('.v').innerHTML = fmt(g.items.find(p => p.key === g.value), state[g.value]); btn.setAttribute('aria-label', `${g.label}: ${g.items.map(p => p.label + ' ' + (p.range ? rangeText(state[p.key]) : state[p.key])).join(', ')}; click to change`); };
-  btn.addEventListener('click', () => {
-    if (pc.classList.contains('open')) return;
-    closePop(true);
-    const was = pick(g.items.map(p => p.key)), v = btn.querySelector('.v');
-    const pop = document.createElement('div'); pop.className = 'pop' + (lone ? '' : ' group'); pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', g.label); pop.append(sheetHead(g.label, g.icon()));
-    let first;
-    if (lone) { const p0 = g.items[0]; first = document.createElement('input'); Object.assign(first, { type: 'text', inputMode: p0.range ? 'text' : 'decimal', value: p0.range ? rangeText(state[p0.key]) : state[p0.key], className: p0.range ? 'pbox rng' : 'pbox' }); first.setAttribute('aria-label', g.label); v.replaceWith(first); pop.append(row(g.items[0], first)); }
-    else { const rows = g.items.map(p => [p, row(p)]); for (const [, r] of rows) pop.append(r); first = pop.querySelector('.pbox'); sheetShown = () => { for (const [p, r] of rows) { if (p.shownWhile) r.style.display = state[p.shownWhile] > 0 ? '' : 'none'; } }; sheetShown(); }   // a row with shownWhile shows only while that setting is above 0 (it keeps its value)
-    document.body.append(pop); pc.classList.add('open');   // on the page, not in the bar: a phone's Safari clips a fixed sheet inside a scrolling bar. No focus: on a phone it would raise the keyboard; tap the box to type
-    const away = e => { if (openPop && e.relatedTarget && !pc.contains(e.relatedTarget) && !pop.contains(e.relatedTarget)) closePop(true); };   // focus gone from the chip and its sheet
-    const life = new AbortController();   // the sheet's listeners on the chip go with the sheet: one left on the chip would close the next sheet opened from it
-    pc.addEventListener('focusout', away, { signal: life.signal }); pop.addEventListener('focusout', away, { signal: life.signal });
-    openPop = keep => { life.abort(); if (!keep && Object.keys(was).some(k => state[k] !== was[k])) { Object.assign(state, was); update(); } pop.remove(); sheetShown = null; if (lone) first.replaceWith(v); pc.classList.remove('open'); show(); };
-  });
-  return show;
+// ---------- the settings sheet ----------
+/* The corner code is a QR of the settings code and the button that opens a bottom sheet over the view (inside it, so it works full screen). The sheet's top level is a row for each
+   group, then the code with the camera as text to copy, paste into or edit, and as a large QR; a row slides to its page; Back, Escape or a tap outside goes back or closes */
+const sheetEl = $('sheet'), slides = $('slides'), pgTop = $('pgTop'), pgDetail = $('pgDetail'), rowsEl = $('srows'), codeBtn = $('code'), field = $('codefield'), codeErr = $('codeerr'), said = $('said');
+const plain = (p, v) => p.range ? rangeText(v) + (p.unit || '') : p.choices ? p.choices.find(c => c[0] === v)[1] : v + (p.unit || '');
+const summary = g => plain(g.items.find(p => p.key === g.value), state[g.value]) + (g.note ? g.note() : '');
+/* a QR of text in alphanumeric mode, the smallest version that fits, at error correction M unless that costs more than one version over L */
+function qrOf(text) {
+  if (typeof qrcode !== 'function') return null;
+  const make = ec => { const q = qrcode(0, ec); q.addData(text, 'Alphanumeric'); q.make(); return q; };
+  const l = make('L'), m = make('M');
+  return m.getModuleCount() <= l.getModuleCount() + 4 ? m : l;
 }
-// the style: a preset of every setting that shapes the masses (Granite, Columns, Layered, Fieldstone, Ashlar); the engine is the same for all
-function styleChip() {
-  const pc = document.createElement('span'); pc.className = 'pc';
-  const btn = document.createElement('button'); btn.className = 'pv'; btn.setAttribute('aria-haspopup', 'dialog');
-  pc.append(btn); bar.insertBefore(pc, bar.firstChild);
-  const show = () => { const s = STYLES.find(x => x[0] === state.style); btn.innerHTML = `${ICON.style}<span class="v">${s[1]}${edited() ? '*' : ''}</span>`; btn.title = 'Style'; btn.setAttribute('aria-label', 'Style: ' + s[1] + (edited() ? ', edited' : '') + '; click to choose'); };
-  btn.addEventListener('click', () => {
-    if (pc.classList.contains('open')) { closePop(true); return; }
-    closePop(true);
-    const pop = document.createElement('div'); pop.className = 'pop styles'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Styles'); pop.append(sheetHead('Style', ICON.style));
+/* dark modules as runs of one path, in module units, with the quiet zone round them */
+function qrSvg(q, quiet, px) {
+  const n = q.getModuleCount(), size = n + 2 * quiet; let d = '';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) { if (!q.isDark(r, c)) continue; let e = c; while (e + 1 < n && q.isDark(r, e + 1)) e++; d += `M${c + quiet} ${r + quiet}h${e - c + 1}v1h-${e - c + 1}z`; c = e; }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}"${px ? ` width="${size * px}" height="${size * px}"` : ''} shape-rendering="crispEdges" aria-hidden="true"><rect width="${size}" height="${size}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+}
+const sheetOpen = () => sheetEl.classList.contains('open');
+let shownCorner = '', shownField = '', page = null, pageSync = null, saidTimer = 0;
+/* the corner: the code without the camera, so it holds still while orbiting */
+function codeSync() {
+  const c = encode(state); if (c === shownCorner) return;
+  shownCorner = c; const q = qrOf(c);
+  codeBtn.innerHTML = q ? qrSvg(q, 2, 2) : c;
+  codeBtn.setAttribute('aria-label', `Settings (code ${c})`); codeBtn.title = `Settings (code ${c})`;
+}
+/* the field and the large QR: the code with the camera, left alone while the field is being typed in */
+let fieldQueued = false;
+function fieldSync() {
+  if (!sheetOpen() || fieldQueued) return; fieldQueued = true;
+  requestAnimationFrame(() => {
+    fieldQueued = false;
+    const t = encode(state, { camera: true }); if (t === shownField) return;
+    shownField = t; if (document.activeElement !== field) field.value = t;
+    const q = qrOf(t); $('qr').innerHTML = q ? qrSvg(q, 4) : '<small>The QR library did not load.</small>';
+  });
+}
+const rowBtns = GROUPS.map(g => {
+  const b = document.createElement('button'); b.className = 'srow';
+  b.innerHTML = `${g.icon()}<span class="k">${g.label}</span><span class="v"></span>${svg('<path d="M9 6l6 6-6 6"/>', 'chev')}`;
+  b.addEventListener('click', () => openPage(g)); rowsEl.append(b); return b;
+});
+function sheetSync() {
+  GROUPS.forEach((g, i) => { const b = rowBtns[i], s = summary(g); b.firstElementChild.outerHTML = g.icon(); b.querySelector('.v').innerHTML = s; b.setAttribute('aria-label', `${g.label}: ${b.querySelector('.v').textContent}; open`); });
+  if (pageSync) pageSync();
+  codeSync(); fieldSync();
+}
+const div = cls => { const d = document.createElement('div'); d.className = cls; return d; };
+const PAGES = {
+  rows: g => {   /* a row with shownWhile shows only while that setting is above 0 (it keeps its value) */
+    const wrap = div('group-rows'), rs = g.items.map(p => [p, row(p)]);
+    for (const [, r] of rs) wrap.append(r);
+    shownRows = () => { for (const [p, r] of rs) if (p.shownWhile) r.style.display = state[p.shownWhile] > 0 ? '' : 'none'; }; shownRows();
+    return wrap;
+  },
+  style: () => {   /* a style sets the whole preset; Random picks one of the others */
+    const wrap = div('styles');
     for (const [key, label, about] of STYLES) {
       const b = document.createElement('button'); b.setAttribute('aria-pressed', key === state.style && !edited() ? 'true' : 'false');
       b.innerHTML = `<b>${label}</b><small>${about}</small>`;
-      b.addEventListener('click', () => { const others = Object.keys(PRESETS).filter(k => k !== state.style), to = key === 'random' ? others[Math.floor(Math.random() * others.length)] : key; Object.assign(state, { style: to }, PRESETS[to]); closePop(true); syncUI(); update(); btn.focus(); });
-      pop.append(b);
+      b.addEventListener('click', () => { const others = Object.keys(PRESETS).filter(k => k !== state.style), to = key === 'random' ? others[Math.floor(Math.random() * others.length)] : key; Object.assign(state, { style: to }, PRESETS[to]); syncUI(); update(); back(); });
+      wrap.append(b);
     }
-    pop.insertAdjacentHTML('beforeend', '<small class="note">A style sets the Envelope and Structure, the stones’ Faces and bevel, and the cracks; * means one has been changed since.</small>');
-    document.body.append(pop); pc.classList.add('open');   // no focus moved: the sheet is read where it is
-    pop.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { closePop(false); btn.focus(); } });
-    openPop = () => { pop.remove(); pc.classList.remove('open'); };
-  });
-  return show;
+    wrap.insertAdjacentHTML('beforeend', '<small class="note">A style sets the Envelope and Structure, the stones’ Faces and bevel, and the cracks; (edited) means one has been changed since.</small>');
+    return wrap;
+  },
+  seed: () => {   /* a seed is a whole number: every random draw of the wall comes from it */
+    const wrap = div('seedpage'), line = div('seedrow'), box = document.createElement('input');
+    Object.assign(box, { type: 'number', min: 0, max: GROUP_SEED.max, step: 1, value: state.seed, className: 'pbox' }); box.setAttribute('aria-label', 'Seed');
+    const step = (label, d) => { const b = document.createElement('button'); b.className = 'btn'; b.textContent = label; b.setAttribute('aria-label', d < 0 ? 'Previous seed' : 'Next seed'); b.addEventListener('click', () => setSeed(state.seed + d)); return b; };
+    box.addEventListener('input', () => { const x = parseInt(box.value, 10); if (Number.isFinite(x) && x !== state.seed) setSeed(x); });
+    box.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') box.blur(); });
+    line.append(step('←', -1), box, step('→', 1));
+    wrap.append(line); wrap.insertAdjacentHTML('beforeend', '<small>The number every random draw of the wall comes from; the strip under the view shows the neighbouring seeds.</small>');
+    pageSync = () => { if (document.activeElement !== box) box.value = state.seed; };
+    return wrap;
+  },
+};
+function openPage(g) {
+  page = g; shownRows = null; pageSync = null;
+  const head = div('shead'), backBtn = document.createElement('button');
+  backBtn.className = 'btn'; backBtn.setAttribute('aria-label', 'Back'); backBtn.innerHTML = svg('<path d="M15 6l-6 6 6 6"/>') + 'Back'; backBtn.addEventListener('click', back);
+  head.append(backBtn); head.insertAdjacentHTML('beforeend', `<b>${g.icon()}${g.label}</b>`);
+  pgDetail.replaceChildren(head, PAGES[g.page || 'rows'](g));
+  pgDetail.inert = false; pgTop.inert = true; pgDetail.scrollTop = 0; slides.classList.add('deep');
 }
-// the spec: everything on screen as text (to paste to Claude to make the same cliff), and pasted text loaded back
-const SPEC_KEYS = () => [...GROUPS.flatMap(g => g.items.map(p => p.key)), 'draw', ...CHECKS];
-const r1 = x => +x.toFixed(2);
-function specText() {
-  const c = camera.position, t = controls.target, strip = h => String(h).replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');
-  return ['cliffs-from-spines spec', `style ${state.style}${edited() ? ' (edited)' : ''}`, `seed ${state.seed}`, `view ${state.view}`,
-    `camera ${[c.x, c.y, c.z].map(r1).join(' ')} target ${[t.x, t.y, t.z].map(r1).join(' ')}`, '', '[settings]',
-    ...SPEC_KEYS().map(k => `${k} ${Array.isArray(state[k]) ? rangeText(state[k]) : state[k]}`), '', '[result]', ...lastStats.map(([k, v]) => `${k}: ${strip(v)}`), '', '[problems]',
-    ...(problems.length ? problems.slice(-12) : ['none']), ''].join('\n');
+function back() { page = null; shownRows = null; pageSync = null; slides.classList.remove('deep'); pgTop.inert = false; pgDetail.inert = true; }
+function openSheet() { sheetEl.inert = false; sheetEl.classList.add('open'); codeBtn.setAttribute('aria-expanded', 'true'); shownField = ''; fieldSync(); }
+function closeSheet(refocus) { back(); sheetEl.classList.remove('open'); sheetEl.inert = true; codeBtn.setAttribute('aria-expanded', 'false'); if (refocus) codeBtn.focus(); }
+pgDetail.inert = true; sheetEl.inert = true;
+codeBtn.addEventListener('click', () => sheetOpen() ? closeSheet() : openSheet());
+$('sclose').addEventListener('click', () => closeSheet(true));
+document.addEventListener('pointerdown', e => { if (sheetOpen() && !e.target.closest('#sheet, #code')) closeSheet(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen()) { e.preventDefault(); if (page) back(); else closeSheet(true); } }, true);   /* first, so what else Escape does waits for the next press */
+$('sreset').addEventListener('click', () => { Object.assign(state, PRESETS[state.style], { bridge: DEFAULTS.bridge }); syncUI(); update(); });
+const say = t => { said.textContent = t; clearTimeout(saidTimer); saidTimer = setTimeout(() => { said.textContent = ''; }, 2500); };
+$('scopy').addEventListener('click', () => {
+  const t = encode(state, { camera: true }), done = () => say('Copied'), fail = () => { field.value = t; field.focus(); field.select(); say('The browser refused the clipboard: the code is selected, copy it by hand'); };
+  try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fail); else if (document.execCommand) { field.value = t; field.select(); if (document.execCommand('copy')) done(); else fail(); } else fail(); } catch (e) { fail(); }
+});
+/* a code typed or pasted into the field is loaded: the settings, then the view and camera when it has them */
+function loadCode(text) {
+  try {
+    const { values, view } = decode(text);
+    Object.assign(state, values);
+    if (view) {
+      state.draw = view.draw; if (view.view === 'ortho') ortho.zoom = 1; setView(view.view);
+      camera.position.set(...view.position); controls.target.set(...view.target);
+      if (camera === ortho) frameOrtho();
+      controls.update(); draw();
+    }
+    codeErr.textContent = ''; field.blur(); syncUI(); update(); say('Loaded');
+  } catch (e) { codeErr.textContent = e.message; }
 }
-function loadSpec(text) {
-  // one line per entry; text whose line breaks were lost (pasted into a chat) is split before each known word
-  const words = ['style', 'seed', 'view', 'camera', ...SPEC_KEYS()];
-  const lines = text.replace(/\s+(\[[a-z]+\])\s+/g, '\n$1\n').replace(new RegExp('\\s+(?=(' + words.join('|') + ')\\s)', 'g'), '\n').replace(/\s+(?=[A-Z][a-z ]+:)/g, '\n').split('\n').map(l => l.trim());
-  if (!/^cliffs-from-spines spec/.test(lines[0] || '')) throw new Error('this is not a Cliffs from Spines spec');
-  const val = (k, v) => { const d = DEFAULTS[k]; if (Array.isArray(d)) { const r = parseRange(v), p = GROUPS.flatMap(g => g.items).find(q => q.key === k); if (!r) throw new Error(`${k} wants low..high, not '${v}'`); return r.map(x => snapTo(p, x)); } if (typeof d === 'number' && !Number.isFinite(+v)) throw new Error(`${k} wants a number, not '${v}'${k === 'span' ? ' (Span is a chance now, 0..100%)' : k === 'wiggle' ? ' (Wiggle is a share now, 0..100%: how far a crack wanders)' : ''}`); return typeof d === 'boolean' ? v === 'true' : typeof d === 'number' ? +v : v; };
-  let part = 'head', cam = null;
-  for (const l of lines.slice(1)) {
-    if (/^\[.*\]$/.test(l)) { part = l; continue; }
-    if (!l) continue;
-    const [k, ...rest] = l.split(/\s+/), v = rest.join(' ');
-    if (part === 'head') {
-      if (k === 'style' && PRESETS[rest[0]]) state.style = rest[0];
-      if (k === 'seed') state.seed = +rest[0];
-      if (k === 'view') state.view = rest[0];
-      if (k === 'camera') cam = rest.filter(x => x !== 'target').map(Number);
-    } else if (part === '[settings]' && k in DEFAULTS) state[k] = val(k, v);
-  }
-  syncUI(); setView(state.view);
-  if (cam && cam.length === 6 && cam.every(Number.isFinite)) { camera.position.set(cam[0], cam[1], cam[2]); controls.target.set(cam[3], cam[4], cam[5]); controls.update(); }
-  update();
-}
-(function () {
-  const btn = $('spec'), pc = btn.parentNode;
-  btn.addEventListener('click', () => {
-    if (pc.classList.contains('open')) { closePop(true); return; }
-    closePop(true);
-    const pop = document.createElement('div'); pop.className = 'pop spec'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Spec'); pop.append(sheetHead('Spec'));
-    const ta = document.createElement('textarea'); ta.value = specText(); ta.spellcheck = false; ta.setAttribute('aria-label', 'Spec text');
-    const acts = document.createElement('div'); acts.className = 'acts';
-    const msg = document.createElement('small'), say = t => { msg.textContent = t; };
-    const mk = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.addEventListener('click', fn); acts.append(b); };
-    const copy = () => {
-      const done = () => say('Copied. Paste it to Claude to make this same cliff.'), fail = () => { ta.select(); say('The browser did not allow the clipboard here: the text is selected, copy it by hand.'); };
-      try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, fail); else { ta.select(); if (document.execCommand && document.execCommand('copy')) done(); else fail(); } } catch (e) { fail(); }
-    };
-    mk('Copy', () => { if (ta.dataset.edited !== '1') ta.value = specText(); copy(); });
-    mk('Load', () => { try { loadSpec(ta.value); ta.dataset.edited = '0'; say('Loaded: the page now shows this spec.'); } catch (e) { say('Could not load: ' + e.message); } });
-    acts.append(msg);
-    ta.addEventListener('input', () => { ta.dataset.edited = '1'; say(''); });
-    ta.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') closePop(true); });
-    pop.append(ta, acts); document.body.append(pop); pc.classList.add('open');
-    copy();   // the clipboard at once (the box is not focused: no keyboard on a phone)
-    openPop = () => { pop.remove(); pc.classList.remove('open'); };
-  });
-})();
-const shows = [];
+field.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') loadCode(field.value); });
+field.addEventListener('paste', () => setTimeout(() => loadCode(field.value), 0));
+field.addEventListener('input', () => { codeErr.textContent = ''; });
+field.addEventListener('focus', () => field.select());
+
 for (const b of $('view').children) b.addEventListener('click', () => setView(b.dataset.view));
 for (const b of $('draw').children) b.addEventListener('click', () => { state.draw = b.dataset.draw; syncUI(); update(); });
 // the view options: a button on the 3D view opens a small panel; a click elsewhere or Escape closes it
@@ -3026,16 +3121,15 @@ const showPanel = open => { vpanel.hidden = !open; vopts.setAttribute('aria-expa
 vopts.addEventListener('click', e => { e.stopPropagation(); showPanel(vpanel.hidden); });
 vpanel.addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', () => showPanel(false));
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !vpanel.hidden) { showPanel(false); vopts.focus(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.defaultPrevented && !vpanel.hidden) { showPanel(false); vopts.focus(); } });
 for (const k of CHECKS) $(k).addEventListener('change', e => { state[k] = e.target.checked; update(); });
-$('reset').addEventListener('click', () => { Object.assign(state, DEFAULTS, PRESETS[state.style]); syncUI(); update(); });
 $('zin').addEventListener('click', () => zoomBy(0.8));
 $('zout').addEventListener('click', () => zoomBy(1.25));
 $('zfit').addEventListener('click', zoomFit);
 // maximize: the viewer fills the window; the same button (now restore) or Escape puts it back
 const setMax = on => { viewerEl.classList.toggle('max', on); document.body.classList.toggle('vmax', on); const b = $('vmax'); b.setAttribute('aria-pressed', String(on)); b.title = on ? 'Restore' : 'Maximize'; b.setAttribute('aria-label', b.title); };
 $('vmax').addEventListener('click', () => setMax(!viewerEl.classList.contains('max')));
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && viewerEl.classList.contains('max')) setMax(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !e.defaultPrevented && viewerEl.classList.contains('max')) setMax(false); });
 $('prev').addEventListener('click', () => setSeed(state.seed - 1));
 $('next').addEventListener('click', () => setSeed(state.seed + 1));
 document.addEventListener('keydown', e => {
@@ -3045,19 +3139,19 @@ document.addEventListener('keydown', e => {
 });
 // the page's prose shows the constants from the code, never a copy of them
 document.querySelectorAll('[data-const]').forEach(e => { const k = e.dataset.const, pc = k.endsWith('%'), v = { OVER, FLARE_DEG, BRIDGE_MARGIN, COLUMN, THIN, MINSUP, MINBR, BEV_FLAT: BEV.flat, BEV_INR: BEV.inr, GRAZE, GROOVE, TAPER, CRACK_LINES, WIGGLE_TURN, WIGGLE_STEP, OPENING_MOST }[pc ? k.slice(0, -1) : k]; e.textContent = pc ? Math.round(v * 100) + '%' : Array.isArray(v) ? v.join(' to ') : String(+v.toFixed(2)); });
-function setSeed(s) { state.seed = Math.max(0, s | 0); syncUI(); update(); }
+function setSeed(s) { state.seed = Math.min(GROUP_SEED.max, Math.max(0, s | 0)); syncUI(); update(); }
 function syncUI() {
-  if (!shows.length) shows.push(styleChip(), ...GROUPS.map(groupChip));
-  for (const show of shows) show();
+  sheetSync();
   for (const b of $('view').children) b.setAttribute('aria-pressed', b.dataset.view === state.view ? 'true' : 'false');
   for (const b of $('draw').children) b.setAttribute('aria-pressed', b.dataset.draw === state.draw ? 'true' : 'false');
   for (const k of CHECKS) $(k).checked = state[k];
 }
 let ownHash = '';
 let pending = false;
-let sheetShown = null;   // the open sheet's rows shown for the settings as they are
+let shownRows = null;   // the open page's rows shown for the settings as they are
 function update() {
-  if (sheetShown) sheetShown();
+  if (shownRows) shownRows();
+  codeSync(); fieldSync();
   if (pending) return; pending = true;
   requestAnimationFrame(() => { pending = false; doUpdate(); });
 }
@@ -3068,7 +3162,7 @@ function doUpdate() {
 }
 function readHash() {
   const m = /^#([a-z]+)-(\d+)$/.exec(location.hash || '');
-  if (m && PRESETS[m[1]]) { Object.assign(state, { style: m[1] }, PRESETS[m[1]]); state.seed = +m[2]; }
+  if (m && PRESETS[m[1]]) { Object.assign(state, { style: m[1] }, PRESETS[m[1]]); state.seed = Math.min(GROUP_SEED.max, +m[2]); }
 }
 window.addEventListener('hashchange', () => { if (location.hash !== ownHash) { readHash(); syncUI(); update(); } });
 
