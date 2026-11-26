@@ -2143,7 +2143,7 @@ function build(seed, P, opt = {}) {
 // Colours are bytes; the page lights the faces flat, so no normals are sent.
 const BEVEL_PALE = 0.45, PART_PALE = 0.7, STONE_RGB = [185, 180, 168], CRACK_RGB = [71, 74, 76], BAND_RGB = [255, 140, 26], OVER_RGB = [229, 72, 59];   // a bevel is its stone's colour that much of the way to white (a part bevel, held back by a guard, paler still); stone, a crack's inside (dark grey), 55 to 65 degrees (orange), past 65 (red)
 function vividOf(g) { const h = hash2(g, 7) / 4294967296, l = 0.42, s = 0.95; const c = (1 - Math.abs(2 * l - 1)) * s, q = h * 6, x = c * (1 - Math.abs(q % 2 - 1)), m = l - c / 2, [r, gg, b] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(q) % 6]; return [r + m, gg + m, b + m].map(v => Math.round(v * 255)); }   // the same hue as the body's shade, saturated: its spine
-function shadeOf(g) { const h = hash2(g, 7) / 4294967296, l = 0.5 + 0.22 * (hash2(g, 8) / 4294967296 - 0.5), s = 0.28; const c = (1 - Math.abs(2 * l - 1)) * s, q = h * 6, x = c * (1 - Math.abs(q % 2 - 1)), m = l - c / 2, [r, gg, b] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(q) % 6]; return [r + m, gg + m, b + m].map(v => Math.round(v * 255)); }   // a mass's own shade
+function shadeOf(g) { const h = hash2(g, 7) / 4294967296, l = 0.5 + 0.22 * (hash2(g, 8) / 4294967296 - 0.5), s = 0.5; const c = (1 - Math.abs(2 * l - 1)) * s, q = h * 6, x = c * (1 - Math.abs(q % 2 - 1)), m = l - c / 2, [r, gg, b] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(q) % 6]; return [r + m, gg + m, b + m].map(v => Math.round(v * 255)); }   // a mass's own shade
 const EK = p => Math.round(p[0] * 2000) + ',' + Math.round(p[1] * 2000) + ',' + Math.round(p[2] * 2000);
 function surfaceOf(w) {
   let ntri = 0, nface = 0, vol = 0;
@@ -2184,7 +2184,7 @@ const viewOf = w => ({ lo: [-w.W / 2, w.y0, 0], hi: [w.W / 2, w.y1, w.H], spines
 const transfers = o => { const out = []; for (const k of ['pos', 'col', 'faceTri', 'lines']) if (o[k]) out.push(o[k].buffer); if (o.cracks) out.push(o.cracks.lines.on.buffer, o.cracks.lines.off.buffer); if (o.report) for (const k of ['D', 'K', 'O', 'AD', 'AK']) out.push(o.report[k].buffer); return out; };
 // ---------- drawing ----------
 const stoneMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true });
-const massMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });   // the masses view: see-through, so the spines show inside
+const massMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true, transparent: true, opacity: 0.64, depthWrite: false, side: THREE.DoubleSide });   // the masses view: see-through, so the spines show inside
 const edgeMat = new THREE.LineBasicMaterial({ color: 0x2B3340, transparent: true, opacity: 0.45 });
 // the wall from its arrays: its triangles with their colours (lit flat), and the outline lines
 function meshOfBuf(surf, lines, see = false) {
