@@ -269,7 +269,6 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
           </div>
           <span class="lbl">Show</span>
           <div class="checks">
-            <label><input type="checkbox" id="ghost"> The envelope</label>
             <label><input type="checkbox" id="crackLines"> Crack lines</label>
             <label><input type="checkbox" id="lines" checked> Edges</label>
             <label><input type="checkbox" id="bevelsOn" checked> Bevels</label>
@@ -293,7 +292,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <h2>How a cliff is built</h2>
     <ol>
       <li><b>Ranges.</b> Every setting drawn at random is a <b>range</b>: on its slider a handle under each end, the low end and the high end, and a grip above the band between them that moves the whole range (a number&rsquo;s slider is the same with one end); typed <code>low..high</code> (a number alone, <code>7</code>, is the range 7..7: always that). Each draw is made between the ends, every value as likely, from a stream of its own for the job (a stone, a spine, a layer face, a joint, a plane), so one setting never reshuffles another; Height and Depth are the exception, drawn mostly from a smooth field along the wall (below), so they wander rather than spread evenly.</li>
-      <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, as tall as the high end of <b>Height</b> and as deep as the high end of <b>Depth</b>, standing at the back of the square. Its bottom, its back and its two ends (the tile&rsquo;s edges) are <b>crisp</b>: no stone crosses them. Its top and its front are <b>fuzzy</b>: each spine draws how tall it reaches in Height and how far forward in Depth, two thirds from a smooth field along the wall and one third its own, so neighbours stop at similar places and the silhouette wanders instead of being noise.</li>
+      <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, as tall as the high end of <b>Height</b> and as deep as the high end of <b>Depth</b>, standing at the back of the square. Its bottom, its back and its two ends (the tile&rsquo;s edges) are <b>crisp</b>: no stone crosses them. Its top and its front are <b>fuzzy</b>: each spine draws how tall it reaches in Height and how far forward in Depth, two thirds from a smooth field along the wall and one third its own, so neighbours stop at similar places and the silhouette wanders instead of being noise. The Structure view always draws it: a <b>crisp core</b> (edges and a faint fill), the box every stone fills for sure, up to the low end of Height and forward to the low end of Depth, and round its top and front a <b>paler band</b> that fades outward to a dashed outline at the high ends, where stones may or may not reach (a face whose range is one value has no band).</li>
       <li><b>Layers and spines.</b> Every <b>Direction</b> is built the same way, only turned: the spines run up (Up), from the back to the front (Through) or along the wall (Along), and the envelope is cut across them into <b>Layers</b>. Each face where two layers meet is drawn on its own: it slopes along Width by an angle drawn in <b>Lean</b> and along Thickness by one drawn in <b>Pitch</b>, and curves along Width by a height drawn in <b>Sag</b> (its middle that far past its edges) and along Thickness by one drawn in <b>Bow</b>. A face never lies under the face below it, so where two cross, a layer pinches out. In each layer in turn spines are started by dart throwing: a dart is a point in the layer, its direction turned by an angle drawn in <b>Wander</b>; it is kept only if it is clear of every spine already in the layer by <b>Width</b> across the wall and <b>Thickness</b> front to back (each the two ends&rsquo; sizes together), and the layer is full when 80 darts in a row miss. A spine runs on into the next layer with the chance <b>Span</b>, drawn at each face it reaches, so breaks stagger. <b>Order</b> draws the darts&rsquo; places from a grid instead, its pitch the middle of Width by the middle of Thickness, every other layer moved half a Width so the joints alternate as in a laid wall; below 100% each place is moved at random by up to half of (100% &minus; Order) of a spacing along each axis, and at 0% there is no grid: the darts are thrown at random. A layer whose spines are at least <span data-const="COLUMN"></span> Widths long (a column) gives all its spines one lean along the wall, drawn in Wander, so neighbours stay parallel and none narrows against another.</li>
       <li><b>Cells.</b> Each spine is one convex stone, from the layer face it starts on to the one it stops at (each taken as its tangent plane at the spine there, so Sag and Bow become planes). Between it and each spine that shares a layer with it, the stone is cut by the plane halfway between the two spines&rsquo; closest points (measured with Thickness against Width as the proportion, a stretch of the whole wall, so planes stay planes), then by the envelope. The planes are drawn pair by pair and do not have to agree, so some space can be left to no stone. <b>Width</b> and <b>Thickness</b> space the spines; they do not move the planes. <b>Joint</b>, drawn for each pair, moves each side half of it from the halfway plane: over zero a gap opens (separate stones), under zero each reaches past it into its neighbour (they overlap). The cells are not a chain: every contact is known before any stone is carved, so every stone is carved on its own.</li>
       <li><b>Bodies.</b> A spine that runs through several layers is one stone, carved whole. <b>Fuse</b> joins two neighbouring spines whose cells share a face into one body, one draw for each two from a stream of the pair&rsquo;s own; a cell narrower than 3 mm across joins the neighbour it shares the most side face with. A body is carved cell by cell with the faces where its cells meet kept flat, so the slicer fuses them into one stone; a body that rests on nothing the ground holds is joined to a touching body that is held.</li>
@@ -2327,12 +2326,37 @@ function paintSurf(surf, paint) {
   paint.faces.forEach((fi, k) => { const c = paint.red[k] ? OVER_RGB : BAND_RGB; for (let o = 9 * faceTri[fi], e = 9 * faceTri[fi + 1]; o < e; o += 3) { col[o] = c[0]; col[o + 1] = c[1]; col[o + 2] = c[2]; } });
   surf.paint = paint;
 }
-// the envelope, a ghost box
-function ghostOf(faces) {
-  const pos = []; for (const f of faces) { const v = f.verts; for (let i = 1; i + 1 < v.length; i++) for (const p of [v[0], v[i], v[i + 1]]) pos.push(...p); }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  const grp = new THREE.Group();
-  grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x287B62, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 })));
+/* the envelope as the structure view draws it: a crisp core (the box every stone fills for sure: up to the low end of Height and forward to the low
+   end of Depth) with its edges as lines and a faint fill, and a paler band round it where the top and the front are fuzzy (up to the high ends), made of
+   thin sheets that grow fainter outward and ended by a dashed outline; a face whose range is one value has no band */
+const ENV_RGB = 0x3F5878, ENV_CORE = 0x24405F;
+function envelopeOf(V, P) {
+  const grp = new THREE.Group(), x = V.hi[0], y1 = V.hi[1], hL = Math.min(P.height[0], V.hi[2]), hH = V.hi[2], dL = Math.min(P.depth[0], V.hi[1] - V.lo[1]), dH = V.hi[1] - V.lo[1], yc = y1 - dL;
+  const quad = (a, b, c, d) => [...a, ...b, ...c, ...a, ...c, ...d];
+  const mesh = (pos, opacity) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: ENV_RGB, transparent: true, opacity, depthWrite: false, depthTest: false, side: THREE.DoubleSide })); grp.add(m); return m; };
+  const lines = (pts, dashed, opacity) => {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3));
+    const m = new THREE.LineSegments(g, dashed ? new THREE.LineDashedMaterial({ color: ENV_RGB, dashSize: 1.4, gapSize: 1.2, transparent: true, opacity, depthTest: false }) : new THREE.LineBasicMaterial({ color: ENV_RGB, transparent: true, opacity, depthTest: false }));
+    if (dashed) m.computeLineDistances(); grp.add(m);
+  };
+  const c = [[-x, yc, 0], [x, yc, 0], [x, y1, 0], [-x, y1, 0], [-x, yc, hL], [x, yc, hL], [x, y1, hL], [-x, y1, hL]];
+  const f = (i, j, k, l) => quad(c[i], c[j], c[k], c[l]);
+  mesh([...f(0, 1, 2, 3), ...f(4, 5, 6, 7), ...f(0, 1, 5, 4), ...f(3, 2, 6, 7), ...f(0, 3, 7, 4), ...f(1, 2, 6, 5)], 0.05);
+  for (const [i, j] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) {   /* crisp: each edge a thin rod, so it keeps its width at any zoom */
+    const A = new THREE.Vector3(...c[i]), B = new THREE.Vector3(...c[j]), rod = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, A.distanceTo(B), 6), new THREE.MeshBasicMaterial({ color: ENV_CORE, transparent: true, opacity: 0.8, depthTest: false }));
+    rod.position.copy(A).add(B).multiplyScalar(0.5); rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), B.clone().sub(A).normalize()); grp.add(rod);
+  }
+  const N = 8, fade = k => 0.15 * Math.pow(1 - (k + 0.5) / N, 1.4);
+  if (hH - hL > 1e-6) {   /* the top: level sheets from the core's top to the high end of Height */
+    for (let k = 0; k < N; k++) { const z = hL + (hH - hL) * (k + 0.5) / N; mesh(quad([-x, yc, z], [x, yc, z], [x, y1, z], [-x, y1, z]), fade(k)); }
+    lines([[-x, yc, hH], [x, yc, hH], [x, yc, hH], [x, y1, hH], [x, y1, hH], [-x, y1, hH], [-x, y1, hH], [-x, yc, hH]], true, 0.7);
+  }
+  if (dH - dL > 1e-6) {   /* the front: upright sheets from the core's front to the high end of Depth */
+    for (let k = 0; k < N; k++) { const y = yc - (dH - dL) * (k + 0.5) / N; mesh(quad([-x, y, 0], [x, y, 0], [x, y, hL], [-x, y, hL]), fade(k)); }
+    const yf = y1 - dH;
+    lines([[-x, yf, 0], [x, yf, 0], [x, yf, 0], [x, yf, hL], [x, yf, hL], [-x, yf, hL], [-x, yf, hL], [-x, yf, 0]], true, 0.7);
+  }
+  grp.userData.envelope = true; grp.traverse(o => { o.renderOrder = 8; });
   return grp;
 }
 // ---------- the reference miniature ----------
@@ -2388,7 +2412,7 @@ const PRESETS = {   // ranges are [lo, hi]
   ashlar: { squares: 2, height: [TALL, TALL], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], bevel: [1.2, 1.6], weather: [0, 0], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
 };
 const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and overlapping into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['fieldstone', 'Fieldstone', 'A dry wall of irregular, roundish stones placed at random in rough courses, some running up through the next course, no cracks'], ['ashlar', 'Ashlar', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
-const DEFAULTS = { style: 'layered', ...PRESETS.layered, bridge: 15, draw: 'rocks', ghost: false, crackLines: false, lines: true, bevelsOn: true, mini: true };
+const DEFAULTS = { style: 'layered', ...PRESETS.layered, bridge: 15, draw: 'rocks', crackLines: false, lines: true, bevelsOn: true, mini: true };
 const state = { view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 // a slider's value, aligned on its decimal point (no trailing .0, room kept for it), so the number holds still while dragging
@@ -2451,7 +2475,7 @@ const GROUPS = [
     { ...R_('opening', 'Opening', 0.1, OPENING_MOST, 0.05, MM, `How wide each crack opens at the surface, drawn for each crack; every crack is the same V (each wall ${GROOVE.toFixed(1)}° off the face), so it is about ${(1 / (2 * Math.tan(GROOVE * DEG))).toFixed(1)} times as deep, and printable whichever way it runs. Its free ends taper to nothing. Below the nozzle’s width (0.4 mm) it prints as a mark, not a gap. A gap within one stone (Joint is the gap between two).`), shownWhile: 'cracks' },
     { ...P_('wiggle', 'Wiggle', 0, 100, 1, '%', `How far a crack meanders off its line: 0% straight, 100% the most (its heading up to ${WIGGLE_TURN}° off the line). It walks in steps ${WIGGLE_STEP[0]} to ${WIGGLE_STEP[1]} mm long, each turning its heading by up to this share of ${WIGGLE_TURN}°, kept within the share, before the walk is pulled back so the crack ends where its line ends.`), shownWhile: 'cracks' }] },
 ];
-const CHECKS = ['ghost', 'crackLines', 'lines', 'bevelsOn', 'mini'];
+const CHECKS = ['crackLines', 'lines', 'bevelsOn', 'mini'];
 const CLIFF_KEYS = Object.keys(PRESETS.layered);
 const ROCK_KEYS = ['bevel', 'weather', 'bridge', 'cracks', 'network', 'spacing', 'branching', 'opening', 'wiggle'];
 // the settings the engine reads
@@ -2635,6 +2659,8 @@ function glassRig() {
   addLights(rig.paneScene);
   const pre = new THREE.Mesh(mass.geometry, massPrepassMat), pane = new THREE.Mesh(mass.geometry, massMat); pre.renderOrder = 0; pane.renderOrder = 1; rig.paneScene.add(pre, pane);
   extraObj.traverse(o => { if (o.userData.spines) { const m = new THREE.Mesh(o.userData.spines, K.spineCrisp); m.renderOrder = 5; rig.spineScene.add(m); } });
+  const env = []; extraObj.traverse(o => { if (o.userData.envelope) env.push(o); });
+  rig.envScene = new THREE.Scene(); for (const o of env) rig.envScene.add(o);   /* the envelope is drawn over the glass, not through it */
   glass.rig = rig;
 }
 function glassTargets(W, H) {
@@ -2667,6 +2693,7 @@ function drawGlass() {
   renderer.render(R.paneScene, camera);
   const bg = scene.background; scene.background = null;   /* a colour background would clear what is drawn */
   withVisible(marks, () => renderer.render(scene, camera)); scene.background = bg;
+  renderer.clearDepth(); renderer.render(R.envScene, camera);
   renderer.clearDepth(); renderer.render(R.spineScene, camera);   /* the crisp spines last, over the selection's tint, so a lit stone's spine still shows */
   renderer.autoClear = true;
 }
@@ -2759,7 +2786,7 @@ function zoomFit() {
 }
 
 // what else the view shows: the envelope, the layers' faces and the spines, and the crack network's lines on the stones
-function extras(V, surf = null) {
+function extras(V, surf = null, P = null) {
   const grp = new THREE.Group();
   if (state.bevelsOn && surf && surf.unbev && surf.unbev.length) {   // debugging: the seen edges left sharp
     const u = surf.unbev, r = 0.18, pos = new Float32Array(u.length / 6 * 54);   // each a three-sided tube, r mm across
@@ -2771,7 +2798,7 @@ function extras(V, surf = null) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     grp.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xFF00FF, side: THREE.DoubleSide })));
   }
-  if (state.ghost) grp.add(ghostOf(bigSolid([{ n: [1, 0, 0], b: V.hi[0] }, { n: [-1, 0, 0], b: -V.lo[0] }, { n: [0, 1, 0], b: V.hi[1] }, { n: [0, -1, 0], b: -V.lo[1] }, { n: [0, 0, 1], b: V.hi[2] }, { n: [0, 0, -1], b: 0 }])));
+  if (state.draw === 'structure' && P) grp.add(envelopeOf(V, P));   /* the structure view always shows the envelope, the rocks view never */
   // each layer face as a grid over the envelope, coarser than the one the engine reads (a face between layers; where it meets the face below, the layer pinches out)
   if (state.draw === 'structure' && V.layers) {   /* the structure view always shows the layer faces */
     /* each layer face as a sheet reaching LAYER_OVER mm past the envelope on every side (its height held from the nearest sample) */
@@ -2860,7 +2887,7 @@ function rebuild() {
     if (builder && busy && busy.key === key) { jobId = busy.id; waiting = null; return; }
     if (builder && waiting && waiting.key === key) return;
     if (!builder) {
-      ++jobId; const t0 = performance.now(), structure = state.draw === 'structure', w = build(state.seed, pick(ENGINE_KEYS), { cells: structure }), surf = surfaceOf(w), e = { key, view: viewOf(w), surf };
+      ++jobId; const t0 = performance.now(), structure = state.draw === 'structure', P = pick(ENGINE_KEYS), w = build(state.seed, P, { cells: structure }), surf = surfaceOf(w), e = { key, view: viewOf(w), surf, P };
       surf.took = performance.now() - t0; keep(key, e); show(e);
       if (!structure) setTimeout(() => { try { painted(e, overhangOf(w, state.bridge)); } catch (err) { failed('the overhang pass: ' + err.message, err); } }, 0);
       return;
@@ -2877,7 +2904,7 @@ function builtOne(r) {
   if (waiting) { busy = waiting; waiting = null; builder.postMessage(busy.msg); }
   if (!job || r.id !== job.id) return;
   if (r.error) { failed(r.error.split('\n')[0], r.error); return; }
-  const e = { key: job.key, view: r.view, surf: r.surf }; keep(job.key, e);
+  const e = { key: job.key, view: r.view, surf: r.surf, P: job.msg.P }; keep(job.key, e);
   paintKeys.set(job.id, job.key); if (paintKeys.size > 32) paintKeys.delete(paintKeys.keys().next().value);
   if (job.id === jobId) show(e);   // a newer job is on its way: only the latest is shown
 }
@@ -2890,7 +2917,7 @@ function show(e) {
     if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
     rockObj = meshOfBuf(surf, state.lines, state.draw === 'structure'); scene.add(rockObj);
     if (extraObj) { scene.remove(extraObj); disposeGroup(extraObj); }
-    extraObj = extras(view, surf); scene.add(extraObj);
+    extraObj = extras(view, surf, e.P); scene.add(extraObj);
     glass.rig = null; if (state.draw === 'structure') glassRig();
     placeMini(view);
     draw();
