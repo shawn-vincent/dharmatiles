@@ -83,6 +83,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       <div class="ctl only-spines"><span class="lbl">The other spines</span>
         <div class="seg" id="layout"><button data-v="masonry">Rows</button><button data-v="full">Full columns</button><button data-v="mixed">Stacked columns</button><button data-v="random">Random</button></div>
       </div>
+      <div class="checks only-spines"><label><input type="checkbox" id="showVoids"> Show the space no stone claims</label></div>
       <div class="ctl only-spines"><label for="gap">End gap <output id="gap_o"></output></label><input id="gap" type="range" min="0.1" max="3" step="0.1"></div>
       <div class="ctl only-spines"><label for="wobble">Ends off line, up to <output id="wobble_o"></output></label><input id="wobble" type="range" min="0" max="1.5" step="0.1"></div>
       <div class="ctl"><label for="N">Levels <output id="N_o"></output></label><input id="N" type="range" min="1" max="6" step="1"></div>
@@ -98,7 +99,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         <label><input type="checkbox" id="showDots" checked> Dots (or spines)</label>
         <label class="only-dots"><input type="checkbox" id="showBalls"> Keep-away balls</label>
         <label class="only-dots"><input type="checkbox" id="showRing" checked> Cells of the carried dots</label>
-        <label class="only-spines"><input type="checkbox" id="showVoids" checked> Empty space</label>
       </div>
       <button class="btn" id="reseed">New cloud</button>
     </div>
@@ -319,7 +319,7 @@ if (typeof module !== 'undefined') module.exports = { build, measure, buildSpine
 
 <script>
 'use strict';
-const S = { layout: 'masonry', gap: 0.5, wobble: 0, showVoids: true, mode: 'mirror', N: 4, dz: 7, r: 8, lean: 0, seed: 7, cut: 48, others: 'touch', op: 0.1, showDots: true, showBalls: false, showRing: true };
+const S = { layout: 'masonry', gap: 0.5, wobble: 0, showVoids: false, mode: 'mirror', N: 4, dz: 7, r: 8, lean: 0, seed: 7, cut: 48, others: 'touch', op: 0.1, showDots: true, showBalls: false, showRing: true };
 const $ = id => document.getElementById(id), css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const view = $('view'), renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.localClippingEnabled = true; view.appendChild(renderer.domElement);
@@ -363,7 +363,7 @@ function showSpines() {
   }
   if (S.showVoids && B.voids.length) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(B.voids.flat(), 3));
-    group.add(new THREE.Points(g, new THREE.PointsMaterial({ color: cV, size: 0.9, sizeAttenuation: true, transparent: true, opacity: 0.55, depthWrite: false, clippingPlanes: [cutPlane] })));
+    group.add(new THREE.Points(g, new THREE.PointsMaterial({ color: cV, size: 0.6, sizeAttenuation: true, transparent: true, opacity: 0.35, depthWrite: false, clippingPlanes: [cutPlane] })));
   }
   { const bx = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(...BOX)), new THREE.LineBasicMaterial({ color: cS, transparent: true, opacity: 0.5 })); bx.position.copy(C0); group.add(bx); }
   scene.add(group); draw();
