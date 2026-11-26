@@ -347,7 +347,8 @@ function cutSolid(poly, pl) {
   if (cp.length >= 3) out.push({ n: pl.n, b: pl.b, role: pl.role, verts: orderAround(cp, pl.n) });
   return out;
 }
-const polyArea = v => { let a = [0, 0, 0]; for (let i = 1; i + 1 < v.length; i++) a = add(a, cross(sub(v[i], v[0]), sub(v[i + 1], v[0]))); return len(a) / 2; };   // a planar polygon's area
+const fanVec = (v, out) => { let x = 0, y = 0, z = 0; const a = v[0]; for (let i = 1; i + 1 < v.length; i++) { const b = v[i], c = v[i + 1], bx = b[0] - a[0], by = b[1] - a[1], bz = b[2] - a[2], cx = c[0] - a[0], cy = c[1] - a[1], cz = c[2] - a[2]; x += by * cz - bz * cy; y += bz * cx - bx * cz; z += bx * cy - by * cx; } out[0] = x; out[1] = y; out[2] = z; return out; };   /* the sum of a polygon's fan cross products (twice its area, along its normal), into out */
+const polyArea = v => { const a = fanVec(v, [0, 0, 0]); return len(a) / 2; };   // a planar polygon's area
 const fanArea = v => { let s = 0; for (let k = 1; k + 1 < v.length; k++) { const a = v[0], b = v[k], c = v[k + 1]; s += Math.hypot((b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]), (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]), (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / 2; } return s; };   // the same, as the sum of its fan's triangles
 // ---------- the cells engine ----------
 const now = () => performance.now();
@@ -1174,81 +1175,25 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
     // gk: a patch whose far corners lie past BRIDGE from another patch is trimmed to the disk of radius BRIDGE round each corner of the others, so the pair bridges
     const disk = (u, R) => { const o = []; for (let i = 0; i < 16; i++) { const a = 2 * Math.PI * i / 16; o.push([u[0] + R * Math.cos(a) / Math.cos(Math.PI / 16), u[1] + R * Math.sin(a) / Math.cos(Math.PI / 16)]); } return o; };   // circumscribed 16-gon of a disk of radius R, shrunk below
     const trimNear = (Pc, others) => { let out = ccw(Pc); for (const O of others) for (const u of O) { out = inter2(out, disk(u, (BRIDGE - 0.15) * Math.cos(Math.PI / 16))); if (!out || out.length < 3) return null; } return out; };
-    if (thin && pat.length >= 3) { const big = pat.filter(r => Math.abs(area2(r.poly)) >= MINBR); if (big.length >= 2 && big.length < pat.length) pat.splice(0, pat.length, ...big); }   // a bridge needs every end to be a real patch
-    const cutOf = pl => {   // ct: cut: keep the whole bottom (the patches' hull) and cut off only what the measure cannot hold, with the line that keeps the most; repeat while patches and the pair hulls within BRIDGE leave a hole
-      let cutRes = null;
-        let cur = pl.map((p, i) => ({ i, p })), ok_ = false, stp = 0.5;
-        for (let it = 0; it < 12 && cur.length; it++) {
-          const polysC = cur.map(c => c.p), K = ccw(hull2([].concat(...polysC)));
-          const prs = []; for (let a = 0; a < polysC.length; a++) for (let b = a + 1; b < polysC.length; b++) if (bridgeSpan(polysC[a], polysC[b]) <= BRIDGE) prs.push(ccw(hull2(polysC[a].concat(polysC[b]))));
-          let ax_ = 1e9, bx_ = -1e9, ay_ = 1e9, by_ = -1e9; for (const v of K) { ax_ = Math.min(ax_, v[0]); bx_ = Math.max(bx_, v[0]); ay_ = Math.min(ay_, v[1]); by_ = Math.max(by_, v[1]); }
-          const unc = [], span = (P_, y) => { let lo = 1e9, hi = -1e9; for (let i = 0, n = P_.length; i < n; i++) { const A = P_[i], B_ = P_[i + 1 === n ? 0 : i + 1]; if ((A[1] <= y) !== (B_[1] <= y)) { const x = A[0] + (y - A[1]) * (B_[0] - A[0]) / (B_[1] - A[1]); if (x < lo) lo = x; if (x > hi) hi = x; } } return hi < lo ? null : [lo, hi]; };
-          const shp = polysC.concat(prs);   // the covered row by row: spans of the convex pieces, the gaps inside the hull are the holes (grid points of step stp)
-          for (let y = ay_ + stp / 2; y < by_; y += stp) {
-            const kk = span(K, y); if (!kk) continue; const sp = []; for (const P_ of shp) { const r = span(P_, y); if (r) sp.push(r); } sp.sort((p, r) => p[0] - r[0]);
-            let cx_ = kk[0]; const gap = (g0, g1) => { for (let m = Math.ceil((g0 - ax_ - stp / 2) / stp); ; m++) { const x = ax_ + stp / 2 + m * stp; if (x > g1) break; if (x >= g0) unc.push([x, y]); } };
-            for (const r of sp) { if (r[0] > cx_) gap(cx_, Math.min(r[0], kk[1])); if (r[1] > cx_) cx_ = r[1]; if (cx_ >= kk[1]) break; }
-            if (cx_ < kk[1]) gap(cx_, kk[1]);
-          }
-          if (!unc.length) { if (stp > 0.4) { stp = 0.4; continue; } ok_ = true; break; }
-          let best = null, bA = -1;
-          for (let d = 0; d < 24; d++) { const t = 2 * Math.PI * d / 24, nx_ = Math.cos(t), ny_ = Math.sin(t); let c = 1e9; for (const u of unc) { const v = nx_ * u[0] + ny_ * u[1]; if (v < c) c = v; } c -= 0.25; const Kc = half(K, nx_, ny_, c); if (Kc.length < 3) continue; const a_ = Math.abs(area2(Kc)); if (a_ > bA) { bA = a_; best = [nx_, ny_, c]; } }
-          if (!best) break;
-          const Kc = half(K, best[0], best[1], best[2]);
-          const nxt = []; for (const c of cur) { const q2 = inter2(ccw(c.p), ccw(Kc)); if (q2 && q2.length >= 3 && Math.abs(area2(q2)) >= MINBR && minW2(q2) >= MINSW) nxt.push({ i: c.i, p: q2 }); }
-          cur = nxt;
-        }
-        if (ok_ && cur.length) { const aa = []; for (const c of cur) for (const v of c.p) aa.push(v); cutRes = { cur, area: Math.abs(area2(hull2(aa))) }; }
-      return cutRes;
-    };
-    if (pat.length >= 3) {
-      const pl = pat.map(r => ccw(r.poly)), pairs = [];
-      for (let i = 0; i < pl.length; i++) for (let j = i + 1; j < pl.length; j++) if (bridgeSpan(pl[i], pl[j]) <= BRIDGE) pairs.push({ i, j, h: ccw(hull2(pl[i].concat(pl[j]))) });
-      let bad = true;
-      if (thin) {   // thin layers: every patch is kept while the hull of all of them is covered by the patches and the hulls of pairs within BRIDGE (the measure's own test)
-        const hs = ccw(hull2([].concat(...pl))); let ax_ = 1e9, bx_ = -1e9, ay_ = 1e9, by_ = -1e9; for (const v of hs) { ax_ = Math.min(ax_, v[0]); bx_ = Math.max(bx_, v[0]); ay_ = Math.min(ay_, v[1]); by_ = Math.max(by_, v[1]); }
-        let cov = true; const sh = pairs.map(p => p.h);
-        outer: for (let y = ay_ + 0.2; y < by_; y += 0.4) for (let x = ax_ + 0.2; x < bx_; x += 0.4) { if (!inPoly(hs, x, y)) continue; let ok = false; for (const P_ of pl) if (inPoly(P_, x, y)) { ok = true; break; } if (!ok) for (const P_ of sh) if (inPoly(P_, x, y)) { ok = true; break; } if (!ok) { cov = false; break outer; } }
-        if (cov) bad = false;
+    /* which patches the bottom keeps: from the largest, each other patch (largest first) joins while the hull of the set is still held, every point
+       of it on a patch or on the hull of two patches that span at most Bridge (bridgeSpan, the measure's own rule); a patch that cannot join as it is
+       is trimmed toward the set and tried again. A patch smaller than MINBR is no end of a bridge */
+    if (pat.length >= 2) {
+      const pl = pat.map(r => ccw(r.poly)), A_ = pl.map(p => Math.abs(area2(p)));
+      const held = idx => { const hs = ccw(hull2([].concat(...idx.map(i => pl[i])))), sh = [];
+        for (let a = 0; a < idx.length; a++) for (let b = a + 1; b < idx.length; b++) if (bridgeSpan(pl[idx[a]], pl[idx[b]]) <= BRIDGE) sh.push(ccw(hull2(pl[idx[a]].concat(pl[idx[b]]))));
+        let ax_ = 1e9, bx_ = -1e9, ay_ = 1e9, by_ = -1e9; for (const v of hs) { ax_ = Math.min(ax_, v[0]); bx_ = Math.max(bx_, v[0]); ay_ = Math.min(ay_, v[1]); by_ = Math.max(by_, v[1]); }
+        for (let y = ay_ + 0.2; y < by_; y += 0.4) for (let x = ax_ + 0.2; x < bx_; x += 0.4) { if (!inPoly(hs, x, y) || idx.some(i => inPoly(pl[i], x, y)) || sh.some(P_ => inPoly(P_, x, y))) continue; return false; }
+        return true; };
+      const ord = pl.map((_, i) => i).sort((a, b) => A_[b] - A_[a]), set = [ord[0]];
+      for (let t = 1; t < ord.length; t++) {
+        const i = ord[t]; if (A_[i] < MINBR || A_[set[0]] < MINBR) continue;
+        if (held(set.concat(i))) { set.push(i); continue; }
+        const tp = trimNear(pl[i], set.map(j => pl[j])); if (!tp || Math.abs(area2(tp)) < MINBR || minW2(tp) < MINSW) continue;
+        const sv = pl[i]; pl[i] = tp; if (held(set.concat(i))) { set.push(i); pat[i].poly = tp; } else pl[i] = sv;
       }
-      const cutRes = bad && thin ? cutOf(pl) : null;
-      if (bad && thin) {   // grow: from the largest patch, add each other patch (largest first) while the hull of the set is still covered by its patches and the hulls of its pairs within BRIDGE
-        const cover = idx => {
-          const hs = ccw(hull2([].concat(...idx.map(i => pl[i])))); let ax_ = 1e9, bx_ = -1e9, ay_ = 1e9, by_ = -1e9; for (const v of hs) { ax_ = Math.min(ax_, v[0]); bx_ = Math.max(bx_, v[0]); ay_ = Math.min(ay_, v[1]); by_ = Math.max(by_, v[1]); }
-          const sh = pairs.filter(p => idx.includes(p.i) && idx.includes(p.j)).map(p => p.h);
-          for (let y = ay_ + 0.2; y < by_; y += 0.4) for (let x = ax_ + 0.2; x < bx_; x += 0.4) { if (!inPoly(hs, x, y)) continue; let ok = false; for (const i of idx) if (inPoly(pl[i], x, y)) { ok = true; break; } if (!ok) for (const P_ of sh) if (inPoly(P_, x, y)) { ok = true; break; } if (!ok) return false; }
-          return true;
-        };
-        const ord = pl.map((_, i) => i).sort((a, b) => Math.abs(area2(pl[b])) - Math.abs(area2(pl[a])));
-        const set = [ord[0]];
-        for (let t = 1; t < ord.length; t++) {
-          const i = ord[t]; let tr = set.concat(i);
-          if (cover(tr)) { set.push(i); continue; }
-          const sv = pl[i], tp = trimNear(sv, set.map(j => pl[j])); if (!tp || Math.abs(area2(tp)) < MINBR || minW2(tp) < MINSW) continue;
-          pl[i] = tp; for (const p of pairs) if (p.i === i || p.j === i) p.h = ccw(hull2(pl[p.i].concat(pl[p.j])));
-          if (cover(tr)) { set.push(i); pat[i].poly = tp; } else { pl[i] = sv; for (const p of pairs) if (p.i === i || p.j === i) p.h = ccw(hull2(pl[p.i].concat(pl[p.j]))); }
-        }
-        let gA = 0; if (set.length >= 2) { const aa = []; for (const i of set) for (const v of pl[i]) aa.push(v); gA = Math.abs(area2(hull2(aa))); }
-        if (cutRes && cutRes.area > gA) { for (const c of cutRes.cur) pat[c.i].poly = c.p; const keep = cutRes.cur.map(c => pat[c.i]); pat.splice(0, pat.length, ...keep); bad = false; }
-        else if (set.length >= 2) { const keep = set.map(i => pat[i]); pat.splice(0, pat.length, ...keep); bad = false; }
-      }
-      if (bad) {
-        let best = null, bA = -1; for (const pr of pairs) { if (Math.min(Math.abs(area2(pl[pr.i])), Math.abs(area2(pl[pr.j]))) < MINBR) continue; const a_ = Math.abs(area2(pr.h)); if (a_ > bA) { bA = a_; best = pr; } }   // a pair whose ends can both carry a bridge
-        if (best) pat.splice(0, pat.length, pat[best.i], pat[best.j]);
-        else { let bi = 0, ba = -1; pat.forEach((r, i) => { const a_ = Math.abs(area2(r.poly)); if (a_ > ba) { ba = a_; bi = i; } }); pat.splice(0, pat.length, pat[bi]); }
-      }
-    } else if (thin && pat.length === 2 && bridgeSpan(pat[0].poly, pat[1].poly) > BRIDGE && (() => {   // ct: the two patches too far apart: cut the hull where the pair cannot be held, when that keeps more than trimming the smaller one
-      const pl2 = pat.map(r => ccw(r.poly)), cr = cutOf(pl2); if (!cr) return false;
-      const a0 = Math.abs(area2(pat[0].poly)), a1 = Math.abs(area2(pat[1].poly)), big = a0 >= a1 ? 0 : 1, sm = 1 - big, tr = trimNear(pat[sm].poly, [pat[big].poly]);
-      let trA = Math.max(a0, a1); if (tr && Math.abs(area2(tr)) >= MINBR && minW2(tr) >= MINSW) trA = Math.abs(area2(hull2(pat[big].poly.concat(tr))));
-      if (cr.area <= trA) return false;
-      for (const c of cr.cur) pat[c.i].poly = c.p; const keep = cr.cur.map(c => pat[c.i]); pat.splice(0, pat.length, ...keep); return true; })()) { /* cut */
-    } else if (thin && pat.length === 2 && bridgeSpan(pat[0].poly, pat[1].poly) > BRIDGE && (() => {
-      const a0 = Math.abs(area2(pat[0].poly)), a1 = Math.abs(area2(pat[1].poly)), big = a0 >= a1 ? 0 : 1, sm = 1 - big;
-      const tr = trimNear(pat[sm].poly, [pat[big].poly]); if (!tr || Math.abs(area2(tr)) < MINBR || minW2(tr) < MINSW) return false;
-      pat[sm].poly = tr; return true; })()) { /* the smaller patch is trimmed and both stay */
-    } else if (pat.length === 2 && bridgeSpan(pat[0].poly, pat[1].poly) > BRIDGE) { pat.splice(0, 2, Math.abs(area2(pat[0].poly)) > Math.abs(area2(pat[1].poly)) ? pat[0] : pat[1]); }
-    if (pat.length === 2 && MINBR > 0) { const a0 = Math.abs(area2(pat[0].poly)), a1 = Math.abs(area2(pat[1].poly)); if (Math.min(a0, a1) < MINBR) { pat.splice(0, 2, a0 >= a1 ? pat[0] : pat[1]); } }   // a bridge needs both ends to be a real patch
+      pat = set.map(i => pat[i]);
+    }
     // the bottom plane is laid to the holders' own top planes: one patch, parallel to its holder's top; two, through both holders' tops at the
     // patches' centres (across the line between them, the mean of the two tops' slopes). The stone then sits flush on a flat holder top, so no part
     // of the patch is sunk past the holder's flare, and the gap is zero over the patch
@@ -1518,11 +1463,23 @@ const OFFS = [40, 12, 16];
 
 // ============================== precompute: the network table ==============================
 const AXES = { planes: [2], columns: [0, 1], blocks: [0, 1, 2] };
+/* a new face's ring starts at the vertex where the angle about its centre (in the frame of perp(n)) is least, the order orderAround gives, so every polygon of the table begins the same way */
+function startRing(f, nx, ny, nz) {
+  const o = fo[f], m = fl[f]; let sx = 0, sy = 0, sz = 0;
+  for (let k = 0; k < m; k++) { const v = fv[o + k]; sx += vx[v]; sy += vy[v]; sz += vz[v]; }
+  const n = [nx, ny, nz], u = perp(n), w = cross(n, u), q = 1 / m, cx = sx * q, cy = sy * q, cz = sz * q;
+  let best = 0, ba = Infinity;
+  for (let k = 0; k < m; k++) { const v = fv[o + k], d0 = vx[v] - cx, d1 = vy[v] - cy, d2 = vz[v] - cz, a = Math.atan2(d0 * w[0] + d1 * w[1] + d2 * w[2], d0 * u[0] + d1 * u[1] + d2 * u[2]); if (a < ba) { ba = a; best = k; } }
+  if (best === 0) return;
+  const r = fv.slice(o, o + m); for (let k = 0; k < m; k++) fv[o + k] = r[(best + k) % m];
+}
 function buildNet(kind, sp, spread, branching) {
+  const BIS = { x: 0, y: 0, z: 0, d: 0 };   /* the plane halfway between two seeds, a's side kept: BIS.x, y, z the unit normal, BIS.d its offset */
+  const bisector = (a, b) => { let x = 0, y = 0, z = 0, rhs = 0; for (let j = 0; j < dim; j++) { const dq = b.q[j] - a.q[j], ax = axes[j]; if (ax === 0) x = dq; else if (ax === 1) y = dq; else z = dq; rhs += (b.q[j] ** 2 - a.q[j] ** 2) / 2; } const l = Math.sqrt(x * x + y * y + z * z), s = 1 / l; BIS.x = x * s; BIS.y = y * s; BIS.z = z * s; BIS.d = rhs / l; return BIS; };
   const axes = AXES[kind], dim = axes.length, pad = sp, lo = TB.lo.map(x => x - pad), hi = TB.hi.map(x => x + pad);
   const gl = axes.map(a => Math.floor((lo[a] - 2 * sp) / sp)), gh = axes.map(a => Math.ceil((hi[a] + 2 * sp) / sp));
-  const seeds = [], at = new Map(), key = idx => idx.join(',');
-  const walk = (i, idx) => { if (i === dim) { const q = idx.map((k, j) => (k + 0.5) * sp + (u01(1, ...idx, j) - 0.5) * spread); const s = { id: seeds.length, idx, q }; seeds.push(s); at.set(key(idx), s); return; } for (let k = gl[i]; k <= gh[i]; k++) walk(i + 1, [...idx, k]); };
+  const seeds = [];   /* in grid order: a seed's id is its place in the grid, first axis slowest */
+  const walk = (i, idx) => { if (i === dim) { const q = idx.map((k, j) => (k + 0.5) * sp + (u01(1, ...idx, j) - 0.5) * spread); seeds.push({ id: seeds.length, idx, q }); return; } for (let k = gl[i]; k <= gh[i]; k++) walk(i + 1, [...idx, k]); };
   walk(0, []);
   const polys = [];
   if (kind === 'planes') {
@@ -1530,31 +1487,48 @@ function buildNet(kind, sp, spread, branching) {
     for (let i = 0; i + 1 < seeds.length; i++) { const z = (seeds[i].q[0] + seeds[i + 1].q[0]) / 2; if (z < lo[2] || z > hi[2]) continue; polys.push({ v: [[lo[0], lo[1], z], [hi[0], lo[1], z], [hi[0], hi[1], z], [lo[0], hi[1], z]], n: [0, 0, 1], b: z }); }
   } else {
     const K = Math.ceil((2.6 * sp + spread) / sp), r2 = (2.6 * sp) ** 2;
-    const inTable = s => axes.every((a, j) => s.q[j] >= lo[a] - sp * 0.0 && s.q[j] <= hi[a]);
-    const d2 = (a, b) => { let t = 0; for (let j = 0; j < dim; j++) t += (a.q[j] - b.q[j]) ** 2; return t; };
-    const bis = (a, b) => { const N = [0, 0, 0]; axes.forEach((ax, j) => { N[ax] = b.q[j] - a.q[j]; }); const l = len(N); let rhs = 0; for (let j = 0; j < dim; j++) rhs += (b.q[j] ** 2 - a.q[j] ** 2) / 2; return { n: mul(N, 1 / l), b: rhs / l }; };
+    const cnt = gh.map((h, j) => h - gl[j] + 1), stride = cnt.map((_, j) => cnt.slice(j + 1).reduce((s, x) => s * x, 1));
+    /* the grid offsets a neighbour can lie at (in order), dropping those whose seeds cannot come within the reach whatever their jitter */
+    const offs = []; { const go = (i, o) => { if (i === dim) { let m = 0; for (const k of o) m += Math.max(0, Math.abs(k) * sp - spread) ** 2; if (m <= r2) offs.push(o); return; } for (let k = -K; k <= K; k++) go(i + 1, [...o, k]); }; go(0, []); }
+    const ofsId = offs.map(o => o.reduce((s, k, j) => s + k * stride[j], 0));
+    const inTable = s => axes.every((a, j) => s.q[j] >= lo[a] && s.q[j] <= hi[a]);
+    const nbId = new Int32Array(offs.length), nbD = new Float64Array(offs.length);
     for (const a of seeds) {
       if (!inTable(a)) continue;
-      const nb = []; const go = (i, idx) => { if (i === dim) { const s = at.get(key(idx)); if (s && s !== a && d2(a, s) <= r2) nb.push(s); return; } for (let k = -K; k <= K; k++) go(i + 1, [...idx, a.idx[i] + k]); }; go(0, []);
-      nb.sort((x, y) => d2(a, x) - d2(a, y));
-      let p = boxPoly(lo, hi), far = Infinity, n = 0;
-      for (const b of nb) { if (d2(a, b) > 4 * far) break; p = cutSolid(p, { ...bis(a, b), role: 'cell:' + b.id }); if (!p.length) break; if (++n % 4 === 0) { let m = 0; for (const f of p) for (const v of f.verts) { let t = 0; for (let j = 0; j < dim; j++) t += (v[axes[j]] - a.q[j]) ** 2; if (t > m) m = t; } far = m; } }
-      for (const f of p) if (String(f.role).startsWith('cell:') && +f.role.slice(5) > a.id) polys.push({ v: f.verts, n: f.n, b: f.b });
+      /* the seeds near enough to cut the cell, nearest first (an insertion sort: ties stay in grid order) */
+      let nn = 0;
+      for (let q = 0; q < offs.length; q++) {
+        const o = offs[q]; let ok = true; for (let j = 0; j < dim; j++) { const k = a.idx[j] - gl[j] + o[j]; if (k < 0 || k >= cnt[j]) { ok = false; break; } }
+        if (!ok || ofsId[q] === 0) continue;
+        const id = a.id + ofsId[q], s = seeds[id]; let d = 0; for (let j = 0; j < dim; j++) d += (a.q[j] - s.q[j]) ** 2;
+        if (d > r2) continue;
+        let i = nn++; while (i > 0 && nbD[i - 1] > d) { nbD[i] = nbD[i - 1]; nbId[i] = nbId[i - 1]; i--; } nbD[i] = d; nbId[i] = id;
+      }
+      initBox(lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]);
+      let far = Infinity, n = 0;
+      for (let oi = 0; oi < nn; oi++) {
+        const b = seeds[nbId[oi]]; if (nbD[oi] > 4 * far) break;
+        const bs = bisector(a, b); clip(bs.x, bs.y, bs.z, bs.d, b.id);
+        if (empty) break;
+        if (ft[nF - 1] === b.id) startRing(nF - 1, bs.x, bs.y, bs.z);
+        if (++n % 4 === 0) { let m = 0; for (let v = 0; v < nV; v++) { let t = 0; for (let j = 0; j < dim; j++) { const c = axes[j] === 0 ? vx[v] : axes[j] === 1 ? vy[v] : vz[v]; t += (c - a.q[j]) ** 2; } if (t > m) m = t; } far = m; }
+      }
+      for (let f = 0; f < nF; f++) if (ft[f] > a.id) { const bs = bisector(a, seeds[ft[f]]); polys.push({ v: faceXYZ(f), n: [bs.x, bs.y, bs.z], b: bs.d }); }
     }
   }
   // areas, adjacency (shared vertices), the plan: cracks started at even shares, grown round-robin by the neighbour turning least, branching with the chance Branching
-  const N = polys.length, area = polys.map(p => { let a = [0, 0, 0]; for (let i = 1; i + 1 < p.v.length; i++) a = add(a, cross(sub(p.v[i], p.v[0]), sub(p.v[i + 1], p.v[0]))); return len(a) / 2; });
-  const total = area.reduce((s, x) => s + x, 0), vk = v => v.map(x => Math.round(x * 1e3)).join(','), byV = new Map();
+  const N = polys.length, tmp = [0, 0, 0], area = polys.map(p => len(fanVec(p.v, tmp)) / 2);
+  const total = area.reduce((s, x) => s + x, 0), vk = v => (((Math.round((v[0] - lo[0]) * 1e3) + 1) * RX + Math.round((v[1] - lo[1]) * 1e3) + 1) * RY + Math.round((v[2] - lo[2]) * 1e3) + 1), RX = (hi[1] - lo[1]) * 1e3 + 3, RY = (hi[2] - lo[2]) * 1e3 + 3, byV = new Map();
   polys.forEach((p, i) => { for (const v of p.v) { const k = vk(v); (byV.get(k) || byV.set(k, []).get(k)).push(i); } });
-  const nbr = polys.map(() => new Map());
-  for (const l of byV.values()) for (const a of l) for (const b of l) if (a !== b) nbr[a].set(b, (nbr[a].get(b) || 0) + 1);
+  const nbr = polys.map(() => ({ id: [], n: [] }));   /* each boundary's neighbours in the order first met, with the vertices shared */
+  for (const l of byV.values()) for (const a of l) { const r = nbr[a]; for (const b of l) if (a !== b) { const k = r.id.indexOf(b); if (k < 0) { r.id.push(b); r.n.push(1); } else r.n[k]++; } }
   const rank = new Float64Array(N).fill(-1), rs = ckStream(2, kind.length, Math.round(sp * 100)), order = [];
   if (kind === 'planes') { for (let i = 0; i < N; i++) rank[i] = (i + 0.5) / N; const perm = [...Array(N).keys()].sort(() => rs() - 0.5); perm.forEach((pi, j) => { rank[pi] = (j + 0.5) / N; }); }
   else {
     const left = [...Array(N).keys()]; for (let i = N - 1; i > 0; i--) { const j = Math.floor(rs() * (i + 1)); [left[i], left[j]] = [left[j], left[i]]; }
     let lp = 0, got = 0; const Nc = Math.max(1, Math.round(N / CRACK_LINES)); let active = [];
     const take = (cr, i) => { got += area[i]; rank[i] = got / total; cr.lines.push(i); cr.tips.push(i); };
-    const cands = i => [...nbr[i].keys()].filter(j => rank[j] < 0 && nbr[i].get(j) >= 2).sort((x, y) => Math.abs(dot(polys[i].n, polys[y].n)) - Math.abs(dot(polys[i].n, polys[x].n)));
+    const cands = i => nbr[i].id.filter((j, k) => rank[j] < 0 && nbr[i].n[k] >= 2).sort((x, y) => Math.abs(dot(polys[i].n, polys[y].n)) - Math.abs(dot(polys[i].n, polys[x].n)));
     const grow = cr => {
       while (cr.tips.length) { const i = cr.tips.shift(), c = cands(i); if (!c.length) continue; take(cr, c[0]); if (c[1] !== undefined && rank[c[1]] < 0 && rs() < branching / 100) take(cr, c[1]); return true; }
       for (const i of cr.lines) { const c = cands(i); if (c.length) { take(cr, c[0]); return true; } } return false;
@@ -1568,7 +1542,7 @@ function buildNet(kind, sp, spread, branching) {
     for (let i = 0; i < N; i++) if (rank[i] < 0) rank[i] = 1;
   }
   const r5 = x => Math.round(x * 1e4) / 1e4;
-  return { kind, sp, spread, branching, polys: polys.map((p, i) => ({ v: p.v.map(q => q.map(r5)), r: Math.round(rank[i] * 1e5) / 1e5 })) };
+  return { kind, sp, spread, branching, polys: polys.map((p, i) => { for (const q of p.v) { q[0] = r5(q[0]); q[1] = r5(q[1]); q[2] = r5(q[2]); } return { v: p.v, r: Math.round(rank[i] * 1e5) / 1e5 }; }) };
 }
 const nets = new Map();
 // the table as Float32 numbers (what a file would hold; one table, read back rounded the same way): u32 count; then per polygon: f32 nv, r, n(3), b, lo(3), hi(3), then nv x 3 f32 vertices
@@ -1576,9 +1550,9 @@ function packNet(n) {
   let tot = 1; for (const p of n.polys) tot += 12 + 3 * p.v.length;
   const a = new Float32Array(tot), u = new Uint32Array(a.buffer); u[0] = n.polys.length; let o = 1;
   for (const p of n.polys) {
-    const vs = p.v; let ar = [0, 0, 0]; for (let j = 1; j + 1 < vs.length; j++) ar = add(ar, cross(sub(vs[j], vs[0]), sub(vs[j + 1], vs[0]))); const nn = unit(ar);
+    const vs = p.v, nn = unit(fanVec(vs, [0, 0, 0]));
     a[o++] = vs.length; a[o++] = p.r; a[o++] = nn[0]; a[o++] = nn[1]; a[o++] = nn[2]; a[o++] = dot(nn, vs[0]);
-    for (let j = 0; j < 3; j++) a[o++] = Math.min(...vs.map(v => v[j])); for (let j = 0; j < 3; j++) a[o++] = Math.max(...vs.map(v => v[j]));
+    for (let j = 0; j < 3; j++) { let m = Infinity; for (const v of vs) if (v[j] < m) m = v[j]; a[o++] = m; } for (let j = 0; j < 3; j++) { let m = -Infinity; for (const v of vs) if (v[j] > m) m = v[j]; a[o++] = m; }
     for (const v of vs) { a[o++] = v[0]; a[o++] = v[1]; a[o++] = v[2]; }
   }
   return a;
