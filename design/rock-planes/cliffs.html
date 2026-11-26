@@ -909,14 +909,14 @@ function wall(seed, P, opt = {}) {
   // they do not move the planes. The planes are drawn pair by pair, so some space can be left to no stone. Each plane's last entry: the spine across
   // it, or -1 a layer face, -2 the fuzzy top, -3 the fuzzy front, -4 the ground, -5 the crisp back and ends.
   const pieces = [];
-  const siteAt = (s, k) => [clamp(s.u + s.su * ((k + 0.5) * step - s.wd), u0 + 0.05, u1 - 0.05), clamp(s.v + s.sv * ((k + 0.5) * step - s.wd), v0 + 0.05, v1 - 0.05)];
+  /* a spine, once: its line is (u, v) = (s.u + s.su (w - s.wd), s.v + s.sv (w - s.wd)); each end is where that line meets its layer face (the face's
+     fitted plane, found by iterating), with the face's slope there. The cutting planes, the end caps, holding and the view all read these ends */
+  const endOn = (s, f) => { let w = 0, pu = s.u, pv = s.v;
+    for (let it = 0; it < 4; it++) { fitFace(f, pu, pv); w = fit[0]; pu = clamp(s.u + s.su * (w - s.wd), u0 + 0.05, u1 - 0.05); pv = clamp(s.v + s.sv * (w - s.wd), v0 + 0.05, v1 - 0.05); }
+    fitFace(f, pu, pv); return { u: pu, v: pv, w: fit[0], gu: fit[1], gv: fit[2] }; };
+  const spineOf = s => s.ends || (s.ends = [endOn(s, s.i), endOn(s, s.j)]);
   const NB2 = P.width[1] > 8 ? Math.pow(2.2 * P.width[1], 2) * Math.max(1, AB * AB) : 100;   // neighbours considered: within this squared reach (the wider the spines, the farther; fieldstone keeps 10 mm)
-  const spineEnds = new Map();
-  for (const s of sites) {
-    fitFace(s.i, s.u, s.v); const za = fit[0]; fitFace(s.j, s.u, s.v); const zb = fit[0];
-    const at = z => [s.u + s.su * (z - s.wd), (s.v + s.sv * (z - s.wd)) / AB, z];
-    spineEnds.set(s.id, [at(za), at(zb)]);
-  }
+  const spineEnds = new Map(sites.map(s => [s.id, spineOf(s).map(e => [e.u, e.v / AB, e.w])]));   /* in the stretched frame */
   const closestOf = (A, B, C, D_) => {   /* the closest points of two segments: the four end-to-segment cases and the interior one */
     const u = sub(B, A), v = sub(D_, C), w = sub(A, C), a = dot(u, u), b = dot(u, v), c = dot(v, v), d = dot(u, w), e = dot(v, w);
     const onSeg = (x, P_, Q) => { const q = sub(Q, P_), qq = dot(q, q); return qq < 1e-12 ? P_ : add(P_, mul(q, clamp(dot(sub(x, P_), q) / qq, 0, 1))); };
@@ -941,15 +941,14 @@ function wall(seed, P, opt = {}) {
   const FLATN = Math.cos(OVER * DEG);   /* a face is a top or a bottom when it faces up or down within the overhang angle of level */
   const zOf = e => [-e[0] / e[2], -e[1] / e[2], e[3] / e[2]];   /* a plane n.X <= d as height z = a x + b y + c */
   for (const s of sites) {
-    const k = s.i, kt = s.j - 1, [cx, cy] = siteAt(s, k), tc = siteAt(s, kt);
-    fitFace(k, cx, cy); const bz = fit[0], bgx = fit[1], bgy = fit[2]; fitFace(kt + 1, tc[0], tc[1]); const tz = fit[0], tgx = fit[1], tgy = fit[2];
-    if (tz - bz < 0.1) continue;
+    const k = s.i, [eb, et] = spineOf(s);
+    if (et.w - eb.w < 0.1) continue;
     const pl = [];   // [nx,ny,nz,d,kind,aux]
     for (const e of planesOfSpine(s)) pl.push([e[0], e[1], e[2], e[3], KIND.SIDE, e[4]]);
     // the envelope: crisp ends, back and ground, fuzzy front and top
     pl.push([1, 0, 0, hu, KIND.CRISP, -5], [-1, 0, 0, hu, KIND.CRISP, -5], [0, 1, 0, y1, KIND.CRISP, -5], [0, 0, -1, 0, KIND.CRISP, -4], [0, -1, 0, -(y0 + s.sFront), KIND.ENV, -3], [0, 0, 1, H - s.sTop, KIND.ENV, -2]);
     // its two ends: the tangent planes of the layer faces it starts and stops on
-    pl.push([...plW(-tgx, -tgy, 1, tz - tgx * tc[0] - tgy * tc[1]), KIND.TOP, -1], [...plW(bgx, bgy, -1, -(bz - bgx * cx - bgy * cy)), KIND.TOP, -1]);
+    pl.push([...plW(-et.gu, -et.gv, 1, et.w - et.gu * et.u - et.gv * et.v), KIND.TOP, -1], [...plW(eb.gu, eb.gv, -1, -(eb.w - eb.gu * eb.u - eb.gv * eb.v)), KIND.TOP, -1]);
     const cut = () => { initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4); for (let i = 0; i < pl.length && !empty; i++) { const e = pl[i]; clip(e[0], e[1], e[2], e[3], e[4] | i << 4); } return !empty && nF >= 4; };
     if (!cut()) continue;
     { let za_ = 1e9, zb_ = -1e9; for (let v = 0; v < nV; v++) { if (vz[v] < za_) za_ = vz[v]; if (vz[v] > zb_) zb_ = vz[v]; } if (zb_ - za_ < 0.05) continue; }   // a cell of no thickness is no stone
@@ -1113,7 +1112,7 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
   const CLEARZ = 0.3, CLEARA = 0.5, KEEPH = 1;
   const topAt = (q, x, y) => { let z = Infinity; for (const t of q.tops) z = Math.min(z, tz_(t.pl, x, y)); return z === Infinity ? q.bb[5] : z; };   /* a convex stone's top: the lowest of its top planes */
   /* a spine's height on the wall, lowest and highest end, whichever way it runs */
-  const spineZ = s => s.zr || (s.zr = (() => { const za = effG(s.i, s.u, s.v), zb = effG(s.j, s.u, s.v), a = toW(s.u + s.su * (za - s.wd), s.v + s.sv * (za - s.wd), za)[2], b = toW(s.u + s.su * (zb - s.wd), s.v + s.sv * (zb - s.wd), zb)[2]; return [Math.min(a, b), Math.max(a, b)]; })());
+  const spineZ = s => s.zr || (s.zr = (() => { const [a, b] = spineOf(s).map(e => toW(e.u, e.v, e.w)[2]); return [Math.min(a, b), Math.max(a, b)]; })());
   /* p's top t is under stone q where they overlap (ov) when it lies below the middle of q there (a neighbour beside q, its top as high as q's, is not)
      and p's spine can hold q's (spineUnder), so a stone beside q, however its top lies, is not under it */
   const under = (t, ov, q, p) => { let x = 0, y = 0; for (const v of ov) { x += v[0]; y += v[1]; } x /= ov.length; y /= ov.length; const qb = botN(q, x, y); return tz_(t.pl, x, y) < (qb + topAt(q, x, y)) / 2 && spineUnder(p, q); };
@@ -1502,8 +1501,8 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
   while (queue.length) { const a = queue.pop(); const s = adj.get(a); if (!s) continue; for (const b of s) if (!seen.has(b)) { seen.add(b); queue.push(b); } }
   let lost = deadPieces.length; for (const g of groups.keys()) if (!seen.has(g)) lost++;
   const tri = nTri;
-  const spines = new Float32Array(6 * sites.length);   // each site's spine, from its first layer face to its last (or the fuzzy top)
-  sites.forEach((s, q) => { const za = effG(s.i, s.u, s.v), zb = effG(s.j, s.u, s.v); spines.set([...toW(s.u + s.su * (za - s.wd), s.v + s.sv * (za - s.wd), za), ...toW(s.u + s.su * (zb - s.wd), s.v + s.sv * (zb - s.wd), zb)], 6 * q); });
+  const spines = new Float32Array(6 * sites.length);   // each site's spine, as spineOf has it
+  sites.forEach((s, q) => { const [a, b] = spineOf(s); spines.set([...toW(a.u, a.v, a.w), ...toW(b.u, b.v, b.w)], 6 * q); });
   const spineGrp = Int32Array.from(sites, s => { const pc = s.pieces.find(p => !p.dead); return pc ? pc.grp : find(s.id); });   /* each spine's body, for its colour */
   return { W, H, D, y0, y1, stones, T, sites: sites.length, pieces: pieces.length, groups: groups.size, lost, dead: deadPieces.length, noHold, tri, spines, spineGrp, layers: { gnx, gny, GRX, GR, u0, v0, EG, O, eU, eV, eW } };
 }
