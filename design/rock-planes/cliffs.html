@@ -959,22 +959,41 @@ function wall(seed, P, opt = {}) {
     else if (downs.length) for (const i of downs) pl[i][4] = KIND.BOT;
     else { let zmin = 1e9; for (let v = 0; v < nV; v++) zmin = Math.min(zmin, vz[v]); pl.push([0, 0, -1, -(zmin + 0.3), KIND.BOT, -1]); }   /* a stone that comes down to an edge or a point gets a small flat bottom */
     if (!cut()) continue;
-    let x0 = 1e9, x1 = -1e9, ya = 1e9, yb = -1e9, za = 1e9, zb = -1e9;
-    for (let v = 0; v < nV; v++) { if (vx[v] < x0) x0 = vx[v]; if (vx[v] > x1) x1 = vx[v]; if (vy[v] < ya) ya = vy[v]; if (vy[v] > yb) yb = vy[v]; if (vz[v] < za) za = vz[v]; if (vz[v] > zb) zb = vz[v]; }
     const bots = pl.filter(e => e[4] === KIND.BOT).map(zOf), big = (() => { let best = 0, ba = -1; for (let f = 0; f < nF; f++) if ((ft[f] & 15) === KIND.BOT) { const a_ = polyArea(faceXYZ(f)); if (a_ > ba) { ba = a_; best = pl.filter(e => e[4] === KIND.BOT).indexOf(pl[ft[f] >> 4]); } } return best; })();
     const botPl = bots[big], botX = bots.filter((_, i) => i !== big);
-    const pc = { id: pieces.length, s, layer: k, snap: snap(), planes: pl, bb: [x0, x1, ya, yb, za, zb], ground, botPl, botX0: botX, sink: ground ? 0 : SINK, bgL: Math.hypot(botPl[0], botPl[1], 1), top: null, bot: null, sides: [], flare: [], B: null, rests: [], grp: -1 };
-    pc.botX = botX; topsOf(pc); pc.bot = bottomOf();
+    const pc = { id: pieces.length, s, layer: k, planes: pl, ground, botPl, botX0: botX, sink: ground ? 0 : SINK, bgL: Math.hypot(botPl[0], botPl[1], 1), top: null, bot: null, sides: [], flare: [], B: null, rests: [], grp: -1 };
+    pc.botX = botX; if (!taken(pc, true)) continue;
     pieces.push(pc); s.pieces.push(pc);
   }
   /* what a piece's cell, as clipped now, offers a stone above: each face that faces up within the overhang angle, as its outline in plan and its plane as a height */
   function topsOf(pc) {
-    pc.tops = []; const all = [];
-    for (let f = 0; f < nF; f++) { const e = pc.planes[ft[f] >> 4]; if (!e || e[2] <= FLATN) continue; const fx = faceXYZ(f); pc.tops.push({ poly: ccw(fx.map(p => [p[0], p[1]])), pl: zOf(e), keeps: [] }); for (const p of fx) all.push([p[0], p[1]]); }
+    const was = new Map((pc.tops || []).map(t => [t.i, t])); pc.tops = []; const all = [];   /* a top of the same plane is the same object, kept: stones that rest on it point at it */
+    for (let f = 0; f < nF; f++) { const i = ft[f] >> 4, e = pc.planes[i]; if (!e || e[2] <= FLATN) continue; const fx = faceXYZ(f), o = was.get(i);
+      const poly = ccw(fx.map(p => [p[0], p[1]])); if (o) { o.poly = poly; o.pl = zOf(e); o.shr = undefined; pc.tops.push(o); } else pc.tops.push({ i, poly, pl: zOf(e), keeps: [] }); for (const p of fx) all.push([p[0], p[1]]); }
     pc.top = all.length >= 3 ? ccw(hull2(all)) : null;
   }
   /* the plan of a piece's bottom faces, as clipped now */
   function bottomOf() { const all = []; for (let f = 0; f < nF; f++) if ((ft[f] & 15) === KIND.BOT) for (const p of faceXYZ(f)) all.push([p[0], p[1]]); return all.length >= 3 ? ccw(hull2(all)) : null; }
+  /* the cell as clipped now: its box */
+  /* a piece's cell made again from its planes, each bottom plane as botAs gives it (or as it is), then the extra planes; when it is a solid with a
+     bottom, everything read from the cell (box, bottom, snapshot, tops) is taken again together, so none of it is left from the cell before */
+  function boxNow() { let x0 = 1e9, x1 = -1e9, ya = 1e9, yb = -1e9, za = 1e9, zb = -1e9;
+    for (let v = 0; v < nV; v++) { if (vx[v] < x0) x0 = vx[v]; if (vx[v] > x1) x1 = vx[v]; if (vy[v] < ya) ya = vy[v]; if (vy[v] > yb) yb = vy[v]; if (vz[v] < za) za = vz[v]; if (vz[v] > zb) zb = vz[v]; }
+    return [x0, x1, ya, yb, za, zb]; }
+  function remake(q, botAs, extra = []) {
+    initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4); let own = false;
+    for (let i = 0; i < q.planes.length; i++) { const e = q.planes[i], mine = botAs && ownBot(e); own = own || mine; const c = mine ? botAs(e) : e; clip(c[0], c[1], c[2], c[3], e[4] | i << 4); }
+    if (botAs && !own) { const c = botAs(null); clip(c[0], c[1], c[2], c[3], KIND.BOT); }   /* a stone whose bottom is all neighbours' planes takes the new bottom besides them */
+    for (const c of extra) clip(c[0], c[1], c[2], c[3], KIND.BOT);
+    return !empty && nF >= 4 && taken(q);
+  }
+  /* a bottom plane of the stone's own (a layer face, the ground, the fuzzy envelope), which a bottom may move; a neighbour's halfway plane it faces
+     down on is a bottom too (it rests there), but never moves: moving it would swell the stone into its neighbour */
+  const ownBot = e => e[4] === KIND.BOT && e[5] < 0;
+  /* everything read from the cell as clipped now, taken together. Its tops are taken when the cell is first cut and after a fuzzy-top raise only:
+     in the turned frames, offering stones above the tops of a cell re-made lower makes holding worse (something downstream still reads the first
+     tops), which the holding redesign has to settle */
+  function taken(q, tops = false) { const bt = bottomOf(); if (!bt) return false; q.bb = boxNow(); q.bot = bt; q.snap = snap(); if (tops) topsOf(q); return true; }
   lap('cells');
   // ---- Span and Fuse: one union-find over the sites. A site's pieces are one body (Span); neighbours whose cells share a face join with
   // the Fuse chance, one draw for each two (a stream of the pair's own)
@@ -1017,22 +1036,11 @@ function wall(seed, P, opt = {}) {
     if (g > 1e8) { for (const r of rl) if (r.gmax < g) g = r.gmax; }
     const D = g - 0.35; if (D <= 0.05) return false;
     q.botPl[2] -= D; if (q.botX) for (const b of q.botX) b[2] -= D;
-    initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4);
-    const pl = q.planes;
-    for (let i = 0; i < pl.length; i++) { const e = pl[i]; if (e[4] === KIND.BOT) { e[3] -= D * e[2]; } clip(e[0], e[1], e[2], e[3], e[4] | i << 4); }
-    if (empty || nF < 4) return false;
-    let x0 = 1e9, x1 = -1e9, ya = 1e9, yb = -1e9, za = 1e9, zb = -1e9;
-    for (let v = 0; v < nV; v++) { if (vx[v] < x0) x0 = vx[v]; if (vx[v] > x1) x1 = vx[v]; if (vy[v] < ya) ya = vy[v]; if (vy[v] > yb) yb = vy[v]; if (vz[v] < za) za = vz[v]; if (vz[v] > zb) zb = vz[v]; }
-    const bt = bottomOf(); if (!bt) return false;
-    q.bb = [x0, x1, ya, yb, za, zb]; q.bot = bt; q.snap = snap();
-    return true;
+    return remake(q, e => e ? [e[0], e[1], e[2], e[3] - D * e[2]] : (() => { const l = Math.hypot(q.botPl[0], q.botPl[1], 1); return [q.botPl[0] / l, q.botPl[1] / l, -1 / l, -q.botPl[2] / l]; })()) && (q.planes.forEach(e => { if (ownBot(e)) e[3] -= D * e[2]; }), true);
   }
   function groundIt(q) {   // a stone near the plate that no holder reaches stands on the ground: its cell is made again with a flat bottom at zero
-      initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4);
-      for (let i = 0; i < q.planes.length; i++) { const e = q.planes[i]; if (e[4] === KIND.BOT) clip(0, 0, -1, 0, e[4] | i << 4); else clip(e[0], e[1], e[2], e[3], e[4] | i << 4); }
-      const bt = !empty && nF >= 4 ? bottomOf() : null;
-      if (bt) { q.botPl = [0, 0, 0]; q.botX = []; q.bgL = 1; q.sink = 0; q.bot = bt; q.snap = snap(); q.ground = true; return true; }
-      return false;
+      if (!remake(q, () => [0, 0, -1, 0])) return false;
+      q.botPl = [0, 0, 0]; q.botX = []; q.bgL = 1; q.sink = 0; q.ground = true; return true;
   }
   // a stone whose own bottom plane is tilted against every holder's top (a layer face at the wall's back or front, leaning with Bow or Sag) is laid parallel to
   // the nearest layer's largest holder top, 0.35 above it, and its cell made again: the stone then sits flush where its own plane could not reach any holder
@@ -1040,15 +1048,10 @@ function wall(seed, P, opt = {}) {
     let r = null; for (const c of rl) { if (!r) { r = c; continue; } const lc = c.holder.bb[5], lr = r.holder.bb[5], ac = Math.abs(area2(c.full)), ar = Math.abs(area2(r.full)); if (lc > lr || (lc === lr && ac > ar)) r = c; }
     if (!r) return false;
     const tp = r.t.pl, bx = tp[0], by = tp[1], b0 = tp[2] + 0.35, L = Math.hypot(bx, by, 1);
-    const old = { botPl: q.botPl, bgL: q.bgL, bb: q.bb, bot: q.bot, snap: q.snap, ent: q.planes.map(e => e.slice()) };
-    initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4);
-    for (let i = 0; i < q.planes.length; i++) { const e = q.planes[i]; if (e[4] === KIND.BOT) { e[0] = bx / L; e[1] = by / L; e[2] = -1 / L; e[3] = (-b0 + 1.3) / L; } clip(e[0], e[1], e[2], e[3], e[4] | i << 4); }
-    const bt = !empty && nF >= 4 ? bottomOf() : null;
-    if (!bt) { q.planes.forEach((e, i) => { for (let j = 0; j < 4; j++) e[j] = old.ent[i][j]; }); return false; }
-    let x0 = 1e9, x1 = -1e9, ya = 1e9, yb = -1e9, za = 1e9, zb = -1e9;
-    for (let v = 0; v < nV; v++) { if (vx[v] < x0) x0 = vx[v]; if (vx[v] > x1) x1 = vx[v]; if (vy[v] < ya) ya = vy[v]; if (vy[v] > yb) yb = vy[v]; if (vz[v] < za) za = vz[v]; if (vz[v] > zb) zb = vz[v]; }
-    q.botPl = [bx, by, b0]; q.botX = []; q.bgL = L; q.bb = [x0, x1, ya, yb, za, zb]; q.bot = bt; q.snap = snap();
-    return true;
+    const laid = [bx / L, by / L, -1 / L, (-b0 + 1.3) / L];
+    if (!remake(q, () => laid)) return false;
+    for (const e of q.planes) if (ownBot(e)) { e[0] = laid[0]; e[1] = laid[1]; e[2] = laid[2]; e[3] = laid[3]; }
+    q.botPl = [bx, by, b0]; q.botX = []; q.bgL = L; return true;
   }
 function holdPat(q, gap, ms = 1, mw = MINSW) {
       const pat = [];
@@ -1315,16 +1318,10 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
       const zt0 = H - q.s.sTop; let raised = false;
       if (need + CAPT > zt0) { const zt = Math.min(H, need + CAPT); for (const e of q.planes) if (e[4] === KIND.ENV && e[2] === 1) { e[3] = zt; raised = true; } }
       // a plane that only cuts more than the cell's own bottom is one clip of the kept cell; one that lies lower needs the cell made again
-      let lower = raised; if (!lower) { const eb = q.planes.find(e => e[4] === KIND.BOT); restore(q.snap); for (let f = 0; f < nF && !lower; f++) if ((ft[f] & 15) === KIND.BOT) { const o = fo[f], mm = fl[f]; for (let k = 0; k < mm; k++) { const v = fv[o + k], zo = (eb[3] - eb[0] * vx[v] - eb[1] * vy[v]) / eb[2], zn = botN(q, vx[v], vy[v]) - q.sink; if (zn < zo - 1e-4) { lower = true; break; } } } }
-      if (lower) {
-      initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4);
-      for (let i = 0; i < q.planes.length; i++) { const e = q.planes[i]; if (e[4] === KIND.BOT) clip(bg[0] / L_, bg[1] / L_, -1 / L_, (-bg[2] + q.sink) / L_, e[4] | i << 4); else clip(e[0], e[1], e[2], e[3], e[4] | i << 4); }
-      if (q.botX) for (const b of q.botX) { const l = Math.hypot(b[0], b[1], 1); clip(b[0] / l, b[1] / l, -1 / l, (-b[2] + q.sink) / l, KIND.BOT); }
-      } else clipBot(q);
-      if (!empty && nF >= 4) {
-        q.snap = snap();
-        if (raised) topsOf(q);
-      }
+      let lower = raised; if (!lower) { const eb = q.planes.find(ownBot); if (!eb) lower = true; else restore(q.snap); if (eb) for (let f = 0; f < nF && !lower; f++) if ((ft[f] & 15) === KIND.BOT && !(q.planes[ft[f] >> 4] && q.planes[ft[f] >> 4][5] >= 0)) { const o = fo[f], mm = fl[f]; for (let k = 0; k < mm; k++) { const v = fv[o + k], zo = (eb[3] - eb[0] * vx[v] - eb[1] * vy[v]) / eb[2], zn = botN(q, vx[v], vy[v]) - q.sink; if (zn < zo - 1e-4) { lower = true; break; } } } }
+      if (lower) remake(q, () => [bg[0] / L_, bg[1] / L_, -1 / L_, (-bg[2] + q.sink) / L_], (q.botX || []).map(b => { const l = Math.hypot(b[0], b[1], 1); return [b[0] / l, b[1] / l, -1 / l, (-b[2] + q.sink) / l]; }));
+      else { clipBot(q); if (!empty && nF >= 4) taken(q); }
+      if (raised) topsOf(q);
     }
     // the flare rises from the bottom's outline at FLARE_DEG degrees from upright
     const B = ccw(q.B), n = B.length;
@@ -1409,7 +1406,7 @@ function holdPat(q, gap, ms = 1, mw = MINSW) {
   const PGX = 6, PGY = 4, PGZ = 4, pgrid = new Map();
   for (const q of pieces) { if (q.dead) continue; const b = q.bb; for (let ix = Math.floor(b[0] / PGX); ix <= Math.floor(b[1] / PGX); ix++) for (let iy = Math.floor(b[2] / PGY); iy <= Math.floor(b[3] / PGY); iy++) for (let iz = Math.floor(b[4] / PGZ); iz <= Math.floor(b[5] / PGZ); iz++) { const k = ((ix + 64) * 128 + (iy + 64)) * 128 + iz + 64; let l = pgrid.get(k); if (!l) pgrid.set(k, l = []); l.push(q); } }
   const inside = (q, x, y, z) => {
-    for (const e of q.planes) { if (e[4] === KIND.BOT) { if (z < botZ(q, x, y)) return false; continue; } if (e[0] * x + e[1] * y + e[2] * z > e[3]) return false; }
+    for (const e of q.planes) { if (ownBot(e)) { if (z < botZ(q, x, y)) return false; continue; } if (e[0] * x + e[1] * y + e[2] * z > e[3]) return false; }
     for (const f of q.flare) if (f[0] * x + f[1] * y + f[2] * z > f[3]) return false; return true;
   };
   // the carve's two questions of a piece: where a point lies in no other stone (open), and which side faces are glued to a neighbour
