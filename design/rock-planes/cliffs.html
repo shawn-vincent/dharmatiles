@@ -3450,7 +3450,7 @@ function partsOf(surf) {
   for (let i = 0; i < surf.stoneOf.length; i++) {
     if (ja && ja[i]) continue;
     const l = surf.stoneOf[i][1], on = ids(surf.stoneRel[i][1]), up = ids(surf.stoneRel[i][2]);
-    const lw = l >= 0 ? 'layer ' + l : '', rw = [on.length ? 'rests on ' + on.slice(0, 3).join(', ') + (on.length > 3 ? ' +' + (on.length - 3) : '') : '', up.length ? 'holds up ' + up.length : ''].filter(Boolean).join(' · ');
+    const lw = l >= 0 ? 'layer ' + l : '', rw = [on.length ? 'rests on ' + on.slice(0, 3).join(', ') + (on.length > 3 ? ' +' + (on.length - 3) : '') : '', up.length ? 'holds up ' + up.slice(0, 3).join(', ') + (up.length > 3 ? ' +' + (up.length - 3) : '') : ''].filter(Boolean).join(' · ');
     pos.set(i, idx.length); idx.push(i); layer.push(lw); rel.push(rw); hay.push(`stone ${i} ${lw} ${rw}`.toLowerCase());
   }
   return surf.parts = { idx, layer, rel, hay, pos };
