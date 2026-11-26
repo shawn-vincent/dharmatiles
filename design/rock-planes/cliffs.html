@@ -225,13 +225,11 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
           </div>
           <span class="lbl">Draw</span>
           <div class="seg" id="draw" role="group" aria-label="Draw">
-            <button data-draw="rocks">Rocks</button><button data-draw="masses">Masses</button>
+            <button data-draw="rocks">Rocks</button><button data-draw="structure">Structure</button>
           </div>
           <span class="lbl">Show</span>
           <div class="checks">
             <label><input type="checkbox" id="ghost"> The envelope</label>
-            <label><input type="checkbox" id="layersOn"> Layers</label>
-            <label><input type="checkbox" id="spinesOn"> Spines</label>
             <label><input type="checkbox" id="crackLines"> Crack lines</label>
             <label><input type="checkbox" id="lines" checked> Edges</label>
             <label><input type="checkbox" id="bevelsOn" checked> Bevels</label>
@@ -263,7 +261,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Cells.</b> Each spine is one convex stone, from the layer face it starts on to the one it stops at (each taken as its tangent plane at the spine there, so Sag and Bow become planes). Between it and each spine that shares a layer with it, the stone is cut by the plane halfway between the two spines&rsquo; closest points (measured with Thickness against Width as the proportion, a stretch of the whole wall, so planes stay planes), then by the envelope. The planes are drawn pair by pair and do not have to agree, so some space can be left to no stone. <b>Width</b> and <b>Thickness</b> space the spines; they do not move the planes. <b>Joint</b>, drawn for each pair, moves each side half of it from the halfway plane: over zero a gap opens (separate stones), under zero each reaches past it into its neighbour (they overlap). The cells are not a chain: every contact is known before any stone is carved, so every stone is carved on its own.</li>
       <li><b>Bodies.</b> A spine that runs through several layers is one stone, carved whole. <b>Fuse</b> joins two neighbouring spines whose cells share a face into one body, one draw for each two from a stream of the pair&rsquo;s own; a cell narrower than 3 mm across joins the neighbour it shares the most side face with. A body is carved cell by cell with the faces where its cells meet kept flat, so the slicer fuses them into one stone; a body that rests on nothing the ground holds is joined to a touching body that is held.</li>
       <li><b>The bottom.</b> A cell finds what holds it before it is carved: the places where its bottom meets the tops of the cells below (any stone placed before it: the stones are placed holders first, and a stone can hold another only when its spine ends below the middle of the other&rsquo;s and starts lower, so a neighbour beside it never holds it and one it overlaps deeply does), each made a patch. Each patch is inset by the bevel&rsquo;s width (the high end of <b>Bevel</b>), so a stone rests on what its bevels leave; an overlap too small to keep <span data-const="MINSUP"></span> mm&sup2; that way is shrunk about its centre to <span data-const="MINSUP"></span> mm&sup2; instead, and a stone keeps the whole overlap with a stone of its own body. A holder's patch is where the bottom lies within reach of its top or sunk into it, at any depth. Laying the bottom moves it, so what touches it is found again against the laid bottom and the bottom laid again, until it stays (at most three times). Patches join the bottom from the largest down, each while the hull of those kept is still covered by the patches and the hulls of pairs that span at most Bridge (a patch that cannot join as it is is trimmed toward them and tried again; one under <span data-const="MINBR"></span> mm&sup2; is no end of a bridge). Its <b>bottom</b> is those patches, and every point of it either rests on one or lies on a line between two patches at most <b>Bridge</b> apart (less <span data-const="BRIDGE_MARGIN"></span> mm, so the plan sits inside the measure). The bottom is laid across its holders and may pass into a stone below that does not hold it: the stones print as one solid, so nothing hangs where they overlap. A stone with no holder is lowered to the nearest top below, or stands on the ground when it is near the plate. A <b>flare</b> rises from the bottom&rsquo;s outline at <span data-const="FLARE_DEG"></span>&deg; from upright, so what lies past a patch is cut away rather than overhanging. Where a stone holds another, its top keeps flat the hull of the patches the stones above rest on, and its fuzzy top is never below its holders&rsquo; tops. Every stone rests on the ground or on a stone that does.</li>
-      <li><b>Rocks.</b> Each cell is carved alone, by the same rules whatever the style: the stone is its cell, and every edge that will be seen (two faces turning at least <span data-const="BEV_FLAT"></span>&deg;, a point just outside it in no other stone) gets one flat bevel, cut the same distance in on both faces, so at the middle angle between them: <b>Bevel</b> wide (drawn between its two ends at each end of the edge), at most <span data-const="BEV_INR%"></span> of the narrower face&rsquo;s inradius, longest edges first. The bottom, the flat tops under stones above, and the faces where a body&rsquo;s cells meet are kept as they are; no plane is made that faces down past <span data-const="OVER"></span>&deg;, so every overhang left is the bottom&rsquo;s own, and a bevel that would cut what is kept is moved out to it, or not made if less than a third of a nozzle is left. A stone stays inside its cell, so with Joint at zero or more stones never overlap and under zero they overlap. The stones are left as separate shells, not joined: the slicer fuses them. Draw shows the rocks or the masses (the cells as cut, before carving, each body its own shade); the view options also show the layers and the spines. <b>Weathering</b> then cuts each stone by an egg of its own shape, just holding the stone at 0% and just inside it at 100%, so corners go first, then edges, then the faces dome; what a stone rests on or carries, and the downward limit, hold it back.</li>
+      <li><b>Rocks.</b> Each cell is carved alone, by the same rules whatever the style: the stone is its cell, and every edge that will be seen (two faces turning at least <span data-const="BEV_FLAT"></span>&deg;, a point just outside it in no other stone) gets one flat bevel, cut the same distance in on both faces, so at the middle angle between them: <b>Bevel</b> wide (drawn between its two ends at each end of the edge), at most <span data-const="BEV_INR%"></span> of the narrower face&rsquo;s inradius, longest edges first. The bottom, the flat tops under stones above, and the faces where a body&rsquo;s cells meet are kept as they are; no plane is made that faces down past <span data-const="OVER"></span>&deg;, so every overhang left is the bottom&rsquo;s own, and a bevel that would cut what is kept is moved out to it, or not made if less than a third of a nozzle is left. A stone stays inside its cell, so with Joint at zero or more stones never overlap and under zero they overlap. The stones are left as separate shells, not joined: the slicer fuses them. Draw shows the rocks, or the <b>structure</b>: the cells as cut, before carving, each body its own shade, as frosted glass, with the spines and the layer faces. <b>Weathering</b> then cuts each stone by an egg of its own shape, just holding the stone at 0% and just inside it at 100%, so corners go first, then edges, then the faces dome; what a stone rests on or carries, and the downward limit, hold it back.</li>
       <li><b>Cracks</b> (each style sets its own: Granite 12.5% on a Blocks network, Columns 19.5% on a Columns network, Layered 90% on a Planes network, Fieldstone none, Ashlar 15%; under Rocks, whose sheet shows the other crack settings only while Cracks is above 0%) follow one hidden <b>Network</b> over the whole cliff: a table of flat boundaries between cells of seeds on a grid, in one, two or three axes: <b>Planes</b> across the vertical (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread, and each boundary carrying the rank at which a crack would reach it (cracks start at even shares and grow from line to line, turning least, branching with the chance <b>Branching</b>, <span data-const="CRACK_LINES"></span> lines to a crack on average). The table is made once for each Network, Spacing and Branching (the first wall that needs one waits for it) and the wall takes it at a seeded offset. Where a boundary crosses a stone&rsquo;s upright or upward faces it is a trace; <b>Cracks</b> picks each stone&rsquo;s own share of its traces&rsquo; length, in rank order, so raising it only adds cracks, and a crack never runs from one stone into another. A boundary a face meets at less than <span data-const="GRAZE"></span>&deg; (it would take off a skin) takes none. A trace is walked in short steps (<b>Wiggle</b>: each step <span data-const="WIGGLE_STEP"></span> mm, its heading turned by up to this share of <span data-const="WIGGLE_TURN"></span>&deg; and kept within the share, so a crack meanders), and cut as a groove of one V: two walls that meet in a sharp line, each <span data-const="GROOVE"></span>&deg; off the face&rsquo;s inward normal, <b>Opening</b> apart at the face (at most <span data-const="OPENING_MOST"></span> mm), so on an upright face its roof faces down at the overhang target whichever way the crack runs, and a wall that would face down past it is turned up to it. A free end tapers to nothing, its depth falling 1 in <span data-const="TAPER"></span>; an end that meets another crack, or the stone&rsquo;s outline where it touches another stone or the ground, runs off at full size; and a stretch that holds a stone above or lies on a bottom is left whole. Each face the grooves touch is cut in its own plane into the convex pieces outside them, and merged back to as few as keep it convex. The faces inside a crack are drawn dark grey.</li>
       <li><b>Overhang is painted after the wall is shown.</b> The wall appears as soon as it is built; a pass over the finished stones then marks every downward face past <span data-const="OVER"></span>&deg; that is not held, and the page paints it orange (55 to 65&deg;) or red (past 65&deg;), and reports each share of the downward area and the area unsupported. A downward face is held where another stone lies under it (within 0.2 mm), or on a line between two held places of its own stone at most Bridge apart; the ground holds what touches it. A face is painted whole when any of it is unheld. Each of orange and red may be 0.1% of the downward area. Red and orange on a model mean overhang only; the inside of a crack is dark grey.</li>
     </ol>
@@ -2191,7 +2189,7 @@ const viewOf = w => ({ lo: [-w.W / 2, w.y0, 0], hi: [w.W / 2, w.y1, w.H], spines
 const transfers = o => { const out = []; for (const k of ['pos', 'col', 'faceTri', 'lines']) if (o[k]) out.push(o[k].buffer); if (o.cracks) out.push(o.cracks.lines.on.buffer, o.cracks.lines.off.buffer); if (o.report) for (const k of ['D', 'K', 'O', 'AD', 'AK']) out.push(o.report[k].buffer); return out; };
 // ---------- drawing ----------
 const stoneMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true });
-/* the masses view is frosted glass: the frontmost mass at a pixel is a translucent pane (this material, lit flat) over a blurred picture of everything behind it; massPrepassMat writes the same depths, colour off, so only the nearest surface of the masses passes the pane's depth test */
+/* the structure view is frosted glass: the frontmost mass at a pixel is a translucent pane (this material, lit flat) over a blurred picture of everything behind it; massPrepassMat writes the same depths, colour off, so only the nearest surface of the masses passes the pane's depth test */
 const massMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, flatShading: true, transparent: true, opacity: 0.6, depthWrite: false, depthFunc: THREE.LessEqualDepth, side: THREE.DoubleSide });
 const massPrepassMat = massMat.clone(); massPrepassMat.colorWrite = false; massPrepassMat.depthWrite = true;
 const edgeMat = new THREE.LineBasicMaterial({ color: 0x2B3340, transparent: true, opacity: 0.45 });
@@ -2351,7 +2349,7 @@ const PRESETS = {   // ranges are [lo, hi]
   ashlar: { squares: 2, height: [TALL, TALL], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], bevel: [1.2, 1.6], weather: [0, 0], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
 };
 const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and overlapping into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['fieldstone', 'Fieldstone', 'A dry wall of irregular, roundish stones placed at random in rough courses, some running up through the next course, no cracks'], ['ashlar', 'Ashlar', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
-const DEFAULTS = { style: 'layered', ...PRESETS.layered, bridge: 15, draw: 'rocks', ghost: false, layersOn: false, spinesOn: false, crackLines: false, lines: true, bevelsOn: true, mini: true };
+const DEFAULTS = { style: 'layered', ...PRESETS.layered, bridge: 15, draw: 'rocks', ghost: false, crackLines: false, lines: true, bevelsOn: true, mini: true };
 const state = { view: 'persp', seed: 1, ...DEFAULTS };
 const $ = id => document.getElementById(id);
 // a slider's value, aligned on its decimal point (no trailing .0, room kept for it), so the number holds still while dragging
@@ -2409,7 +2407,7 @@ const GROUPS = [
     { ...R_('opening', 'Opening', 0.1, OPENING_MOST, 0.05, MM, `How wide each crack opens at the surface, drawn for each crack; every crack is the same V (each wall ${GROOVE.toFixed(1)}° off the face), so it is about ${(1 / (2 * Math.tan(GROOVE * DEG))).toFixed(1)} times as deep, and printable whichever way it runs. Its free ends taper to nothing. Below the nozzle’s width (0.4 mm) it prints as a mark, not a gap. A gap within one stone (Joint is the gap between two).`), shownWhile: 'cracks' },
     { ...P_('wiggle', 'Wiggle', 0, 100, 1, '%', `How far a crack meanders off its line: 0% straight, 100% the most (its heading up to ${WIGGLE_TURN}° off the line). It walks in steps ${WIGGLE_STEP[0]} to ${WIGGLE_STEP[1]} mm long, each turning its heading by up to this share of ${WIGGLE_TURN}°, kept within the share, before the walk is pulled back so the crack ends where its line ends.`), shownWhile: 'cracks' }] },
 ];
-const CHECKS = ['ghost', 'layersOn', 'spinesOn', 'crackLines', 'lines', 'bevelsOn', 'mini'];
+const CHECKS = ['ghost', 'crackLines', 'lines', 'bevelsOn', 'mini'];
 const CLIFF_KEYS = Object.keys(PRESETS.layered);
 const ROCK_KEYS = ['bevel', 'weather', 'bridge', 'cracks', 'network', 'spacing', 'branching', 'opening', 'wiggle'];
 // the settings the engine reads
@@ -2419,7 +2417,7 @@ const same = (a, b) => String(a) === String(b);   // a range is compared by its 
 const edited = () => Object.keys(PRESETS[state.style]).some(k => !same(state[k], PRESETS[state.style][k]));
 
 const viewerEl = $('viewer');
-// ---------- the glass: the masses view ----------
+// ---------- the glass: the structure view ----------
 /* Per pixel, the frontmost mass is a frosted pane: it is drawn translucent over a blurred picture of everything behind it. Spines are crisp
    where they belong to that mass or lie in front of its surface, and blurred and fainter where they are behind it. Passes: F, the frontmost
    mass's body and depth; B, the scene without the masses, spines behind a pane faded; the blur of B at half size; then on the screen the
@@ -2563,7 +2561,7 @@ function setView(v) {
   }
   syncUI(); draw(); rebuildThumbs();
 }
-function draw() { if (!renderer) return; if (glass.rig && state.draw === 'masses') drawGlass(); else renderer.render(scene, camera); }
+function draw() { if (!renderer) return; if (glass.rig && state.draw === 'structure') drawGlass(); else renderer.render(scene, camera); }
 // the zoom buttons: a step nearer or further (the perspective camera moves along its line of sight; the orthographic one scales)
 function zoomBy(f) {
   if (camera === ortho) { ortho.zoom = clamp(ortho.zoom / f, 0.2, 8); ortho.updateProjectionMatrix(); }
@@ -2596,7 +2594,7 @@ function extras(V, surf = null) {
   }
   if (state.ghost) grp.add(ghostOf(bigSolid([{ n: [1, 0, 0], b: V.hi[0] }, { n: [-1, 0, 0], b: -V.lo[0] }, { n: [0, 1, 0], b: V.hi[1] }, { n: [0, -1, 0], b: -V.lo[1] }, { n: [0, 0, 1], b: V.hi[2] }, { n: [0, 0, -1], b: 0 }])));
   // each layer face as a grid over the envelope, coarser than the one the engine reads (a face between layers; where it meets the face below, the layer pinches out)
-  if (state.layersOn && V.layers) {
+  if (state.draw === 'structure' && V.layers) {   /* the structure view always shows the layer faces */
     /* each layer face as a sheet reaching LAYER_OVER mm past the envelope on every side (its height held from the nearest sample) */
     const Y = V.layers, SX = 3, SY = 4, LAYER_OVER = 2.5, pos = [], lp = [];
     const steps = (n, S, d) => { const o = [-LAYER_OVER / d]; for (let k = 0; k < n - 1; k += S) o.push(k); o.push(n - 1, n - 1 + LAYER_OVER / d); return o; };
@@ -2614,8 +2612,8 @@ function extras(V, surf = null) {
     const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
     grp.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x10151C, transparent: true, opacity: 0.9 })));
   }
-  if (state.spinesOn || state.draw === 'masses') {   /* each spine a six-sided tube in its body's colour, saturated; seen through the rocks when they are drawn */
-    const S = V.spines, C = V.spineRGB, n = S.length / 6, r = 0.32, pos = new Float32Array(n * 6 * 18), col = new Uint8Array(n * 6 * 18), glassy = state.draw === 'masses' && surf && surf.stoneOf, bod = new Float32Array(n * 6 * 6);
+  if (state.draw === 'structure') {   /* the structure view always shows the spines: each a six-sided tube in its body's colour, saturated */
+    const S = V.spines, C = V.spineRGB, n = S.length / 6, r = 0.32, pos = new Float32Array(n * 6 * 18), col = new Uint8Array(n * 6 * 18), glassy = state.draw === 'structure' && surf && surf.stoneOf, bod = new Float32Array(n * 6 * 6);
     let o = 0;
     for (let q = 0; q < n; q++) {
       const a = [S[6 * q], S[6 * q + 1], S[6 * q + 2]], b = [S[6 * q + 3], S[6 * q + 4], S[6 * q + 5]], L = len(sub(b, a)); if (L < 1e-6) continue;
@@ -2645,13 +2643,13 @@ addEventListener('unhandledrejection', e => problems.push('rejection: ' + (e.rea
 const BUILDER = `
 onmessage = e => {
   const { id, seed, P, draw } = e.data;
-  let w, masses = draw === 'masses';
+  let w, structure = draw === 'structure';
   try {
-    const t0 = performance.now(), view = (w = build(seed, P, { cells: masses }), viewOf(w)), surf = surfaceOf(w);
+    const t0 = performance.now(), view = (w = build(seed, P, { cells: structure }), viewOf(w)), surf = surfaceOf(w);
     surf.took = performance.now() - t0;
     postMessage({ id, surf, view }, [...transfers(surf), view.spines.buffer, view.spineRGB.buffer, ...(view.layers ? view.layers.EG.map(g => g.buffer) : [])]);
   } catch (err) { postMessage({ id, error: String(err && err.stack || err) }); return; }
-  if (masses) return;
+  if (structure) return;
   try { postMessage({ id, paint: overhangOf(w, P.bridge) }); } catch (err) { postMessage({ id, paintError: String(err && err.stack || err) }); }
 };`;
 let builder = null, thumber = null, thumbDone = null, builderNote = '', jobId = 0, busy = null, waiting = null;
@@ -2683,9 +2681,9 @@ function rebuild() {
     if (builder && busy && busy.key === key) { jobId = busy.id; waiting = null; return; }
     if (builder && waiting && waiting.key === key) return;
     if (!builder) {
-      ++jobId; const t0 = performance.now(), masses = state.draw === 'masses', w = build(state.seed, pick(ENGINE_KEYS), { cells: masses }), surf = surfaceOf(w), e = { key, view: viewOf(w), surf };
+      ++jobId; const t0 = performance.now(), structure = state.draw === 'structure', w = build(state.seed, pick(ENGINE_KEYS), { cells: structure }), surf = surfaceOf(w), e = { key, view: viewOf(w), surf };
       surf.took = performance.now() - t0; keep(key, e); show(e);
-      if (!masses) setTimeout(() => { try { painted(e, overhangOf(w, state.bridge)); } catch (err) { failed('the overhang pass: ' + err.message, err); } }, 0);
+      if (!structure) setTimeout(() => { try { painted(e, overhangOf(w, state.bridge)); } catch (err) { failed('the overhang pass: ' + err.message, err); } }, 0);
       return;
     }
     const job = { id: ++jobId, key, msg: { id: jobId, seed: state.seed, P: pick(ENGINE_KEYS), draw: state.draw } };
@@ -2707,16 +2705,20 @@ function builtOne(r) {
 function failed(msg, detail) { $('err').hidden = false; $('err').textContent = 'The cliff could not be built: ' + msg; problems.push('build: ' + msg); console.error(detail); }
 function show(e) {
   try {
+    /* the same wall drawn the other way (structure or rocks) keeps the selected stone: it is found again by its piece */
+    const was = shown, keptPiece = was && selObj && ME >= 0 && was.key.slice(was.key.indexOf('/')) === e.key.slice(e.key.indexOf('/')) && was.surf.stoneRel ? was.surf.stoneRel[ME][0] : null;
     shown = e; const { view, surf } = e; tintBevels(surf); if (hlObj) highlightEdge(null); if (selObj) selectStone(null); $('einfo').hidden = true; if (surf.stoneRel && !surf.pieceStone) surf.pieceStone = new Map(surf.stoneRel.map((r, i) => [r[0], i]));
     if (rockObj) { scene.remove(rockObj); disposeGroup(rockObj); }
-    rockObj = meshOfBuf(surf, state.lines, state.draw === 'masses'); scene.add(rockObj);
+    rockObj = meshOfBuf(surf, state.lines, state.draw === 'structure'); scene.add(rockObj);
     if (extraObj) { scene.remove(extraObj); disposeGroup(extraObj); }
     extraObj = extras(view, surf); scene.add(extraObj);
-    glass.rig = null; if (state.draw === 'masses') glassRig();
+    glass.rig = null; if (state.draw === 'structure') glassRig();
     placeMini(view);
     draw();
     $('chip').textContent = state.style + (edited() ? ' (edited)' : '') + ' · seed ' + state.seed;
     showStats(view, surf, surf.took);
+    if (keptPiece !== null && surf.pieceStone && surf.pieceStone.has(keptPiece)) { const i = surf.pieceStone.get(keptPiece); ME = i; selectStone(i); $('einfo').innerHTML = stoneWords(i); $('einfo').hidden = false; }
+    else ME = -1;
   } catch (err) { failed(err.message, err); }
 }
 // the overhang paint arrives after the wall is shown: the unheld faces turn orange or red, and the stats say how much
@@ -2791,7 +2793,7 @@ function rebuildThumbs() {
   // in the second worker, one at a time, each answer asking for the next (so a newer strip waits for at most one stale build, whose
   // answer is dropped); else on the page, one a frame
   if (thumber) {
-    const P = pick(ENGINE_KEYS), ask = () => { if (order.length) { const i = order.shift(); thumber.postMessage({ id: [job, i], seed: start + i, P, draw: 'masses' }); } };
+    const P = pick(ENGINE_KEYS), ask = () => { if (order.length) { const i = order.shift(); thumber.postMessage({ id: [job, i], seed: start + i, P, draw: 'structure' }); } };
     thumbDone = r => { if (r.id[0] !== job) return; if (r.error) console.error(r.error); else draw(r.id[1], r.surf); ask(); };
     ask(); return;
   }
