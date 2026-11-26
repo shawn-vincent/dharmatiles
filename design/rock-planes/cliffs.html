@@ -2381,42 +2381,29 @@ function paintSurf(surf, paint) {
   paint.faces.forEach((fi, k) => { const c = paint.red[k] ? OVER_RGB : BAND_RGB; for (let o = 9 * faceTri[fi], e = 9 * faceTri[fi + 1]; o < e; o += 3) { col[o] = c[0]; col[o + 1] = c[1]; col[o + 2] = c[2]; } });
   surf.paint = paint;
 }
-/* the envelope as the structure view draws it: a crisp core (the box every stone fills for sure: up to the low end of Height, forward to the low
-   end of Depth and as long as the low end of Length) with its edges as lines and a faint fill, and a paler band round it where the top, the front and the ends are fuzzy (up to the high ends), made of
-   thin sheets that grow fainter outward and ended by a dashed outline; a face whose range is one value has no band */
-const ENV_RGB = 0x3F5878, ENV_CORE = 0x24405F;
+/* the envelope as the structure view draws it: an outline of rods (each edge a thin rod, so it keeps its width at any zoom), all one thickness and
+   colour: the crisp core (the box every stone fills for sure: up to the low end of Height, forward to the low end of Depth and as long as the low
+   end of Length) in solid rods, and where the top, the front or the ends are fuzzy the outline of their high ends in dashed ones; a face whose range
+   is one value has no dashed outline. The rods are in the glass's scenes like the spines: seen through a mass they are blurred and faded, in front of every mass crisp. */
+const ENV_CORE = [0x24, 0x40, 0x5F], ENV_ROD = 0.2, ENV_DASH = 1.4, ENV_GAP = 1.2;
 function envelopeOf(V, P) {
   const grp = new THREE.Group(), x = V.hi[0], xl = Math.min(P.length[0] / 2, x), y1 = V.hi[1], hL = Math.min(P.height[0], V.hi[2]), hH = V.hi[2], dL = Math.min(P.depth[0], V.hi[1] - V.lo[1]), dH = V.hi[1] - V.lo[1], yc = y1 - dL;
-  const quad = (a, b, c, d) => [...a, ...b, ...c, ...a, ...c, ...d];
-  const mesh = (pos, opacity) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: ENV_RGB, transparent: true, opacity, depthWrite: false, depthTest: false, side: THREE.DoubleSide })); grp.add(m); return m; };
-  const lines = (pts, dashed, opacity) => {
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3));
-    const m = new THREE.LineSegments(g, dashed ? new THREE.LineDashedMaterial({ color: ENV_RGB, dashSize: 1.4, gapSize: 1.2, transparent: true, opacity, depthTest: false }) : new THREE.LineBasicMaterial({ color: ENV_RGB, transparent: true, opacity, depthTest: false }));
-    if (dashed) m.computeLineDistances(); grp.add(m);
-  };
+  const rods = [], rod = (a, b) => rods.push([new THREE.Vector3(...a), new THREE.Vector3(...b)]);
+  const dashed = (a, b) => { const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), L = A.distanceTo(B), d = B.clone().sub(A).normalize(); for (let t = 0; t < L - 1e-6; t += ENV_DASH + ENV_GAP) rods.push([A.clone().addScaledVector(d, t), A.clone().addScaledVector(d, Math.min(L, t + ENV_DASH))]); };
   const c = [[-xl, yc, 0], [xl, yc, 0], [xl, y1, 0], [-xl, y1, 0], [-xl, yc, hL], [xl, yc, hL], [xl, y1, hL], [-xl, y1, hL]];
-  const f = (i, j, k, l) => quad(c[i], c[j], c[k], c[l]);
-  mesh([...f(0, 1, 2, 3), ...f(4, 5, 6, 7), ...f(0, 1, 5, 4), ...f(3, 2, 6, 7), ...f(0, 3, 7, 4), ...f(1, 2, 6, 5)], 0.05);
-  for (const [i, j] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) {   /* crisp: each edge a thin rod, so it keeps its width at any zoom */
-    const A = new THREE.Vector3(...c[i]), B = new THREE.Vector3(...c[j]), rod = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, A.distanceTo(B), 6), new THREE.MeshBasicMaterial({ color: ENV_CORE, transparent: true, opacity: 0.8, depthTest: false }));
-    rod.position.copy(A).add(B).multiplyScalar(0.5); rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), B.clone().sub(A).normalize()); grp.add(rod);
-  }
-  const N = 8, fade = k => 0.15 * Math.pow(1 - (k + 0.5) / N, 1.4);
-  if (hH - hL > 1e-6) {   /* the top: level sheets from the core's top to the high end of Height */
-    for (let k = 0; k < N; k++) { const z = hL + (hH - hL) * (k + 0.5) / N; mesh(quad([-x, yc, z], [x, yc, z], [x, y1, z], [-x, y1, z]), fade(k)); }
-    lines([[-x, yc, hH], [x, yc, hH], [x, yc, hH], [x, y1, hH], [x, y1, hH], [-x, y1, hH], [-x, y1, hH], [-x, yc, hH]], true, 0.7);
-  }
-  if (dH - dL > 1e-6) {   /* the front: upright sheets from the core's front to the high end of Depth */
-    for (let k = 0; k < N; k++) { const y = yc - (dH - dL) * (k + 0.5) / N; mesh(quad([-x, y, 0], [x, y, 0], [x, y, hL], [-x, y, hL]), fade(k)); }
-    const yf = y1 - dH;
-    lines([[-x, yf, 0], [x, yf, 0], [x, yf, 0], [x, yf, hL], [x, yf, hL], [-x, yf, hL], [-x, yf, hL], [-x, yf, 0]], true, 0.7);
-  }
-  if (x - xl > 1e-6) for (const g of [-1, 1]) {   /* the ends: upright sheets from the core's end to the high end of Length */
-    for (let k = 0; k < N; k++) { const X = g * (xl + (x - xl) * (k + 0.5) / N); mesh(quad([X, yc, 0], [X, y1, 0], [X, y1, hL], [X, yc, hL]), fade(k)); }
-    const X = g * x;
-    lines([[X, yc, 0], [X, y1, 0], [X, y1, 0], [X, y1, hL], [X, y1, hL], [X, yc, hL], [X, yc, hL], [X, yc, 0]], true, 0.7);
-  }
-  grp.userData.envelope = true; grp.traverse(o => { o.renderOrder = 8; });
+  for (const [i, j] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) rod(c[i], c[j]);
+  const loop = (pts, f) => { for (let i = 0; i < pts.length; i++) f(pts[i], pts[(i + 1) % pts.length]); };
+  if (hH - hL > 1e-6) loop([[-x, yc, hH], [x, yc, hH], [x, y1, hH], [-x, y1, hH]], dashed);   /* the top: the high end of Height */
+  if (dH - dL > 1e-6) { const yf = y1 - dH; loop([[-x, yf, 0], [x, yf, 0], [x, yf, hL], [-x, yf, hL]], dashed); }   /* the front: the high end of Depth */
+  if (x - xl > 1e-6) for (const g of [-1, 1]) { const X = g * x; loop([[X, yc, 0], [X, y1, 0], [X, y1, hL], [X, yc, hL]], dashed); }   /* the ends: the high end of Length */
+  const cyl = new THREE.CylinderGeometry(ENV_ROD, ENV_ROD, 1, 6).toNonIndexed(), cp = cyl.attributes.position.array, n = cp.length / 3, pos = new Float32Array(rods.length * cp.length), up = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), m4 = new THREE.Matrix4(), v = new THREE.Vector3();
+  rods.forEach(([A, B], k) => {
+    const L = A.distanceTo(B); q.setFromUnitVectors(up, B.clone().sub(A).normalize()); m4.compose(A.clone().add(B).multiplyScalar(0.5), q, new THREE.Vector3(1, L, 1));
+    for (let i = 0; i < n; i++) { v.set(cp[3 * i], cp[3 * i + 1], cp[3 * i + 2]).applyMatrix4(m4); pos.set([v.x, v.y, v.z], k * cp.length + 3 * i); }
+  });
+  const g = new THREE.BufferGeometry(), nv = pos.length / 3, col = new Uint8Array(3 * nv); for (let i = 0; i < nv; i++) col.set(ENV_CORE, 3 * i);
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3, true)); g.setAttribute('body', new THREE.BufferAttribute(new Float32Array(nv), 1));   /* body 0: no mass's own, so a rod is crisp only in front of the pane */
+  const mesh = new THREE.Mesh(g, glassKit().spineBehind); mesh.renderOrder = 4; mesh.userData.spines = g; grp.add(mesh);
   return grp;
 }
 // ---------- the reference miniature ----------
@@ -2721,8 +2708,6 @@ function glassRig() {
   addLights(rig.paneScene);
   const pre = new THREE.Mesh(mass.geometry, massPrepassMat), pane = new THREE.Mesh(mass.geometry, massMat); pre.renderOrder = 0; pane.renderOrder = 1; rig.paneScene.add(pre, pane);
   extraObj.traverse(o => { if (o.userData.spines) { const m = new THREE.Mesh(o.userData.spines, K.spineCrisp); m.renderOrder = 5; rig.spineScene.add(m); } });
-  const env = []; extraObj.traverse(o => { if (o.userData.envelope) env.push(o); });
-  rig.envScene = new THREE.Scene(); for (const o of env) rig.envScene.add(o);   /* the envelope is drawn over the glass, not through it */
   glass.rig = rig;
 }
 function glassTargets(W, H) {
@@ -2755,7 +2740,6 @@ function drawGlass() {
   renderer.render(R.paneScene, camera);
   const bg = scene.background; scene.background = null;   /* a colour background would clear what is drawn */
   withVisible(marks, () => renderer.render(scene, camera)); scene.background = bg;
-  renderer.clearDepth(); renderer.render(R.envScene, camera);
   renderer.clearDepth(); renderer.render(R.spineScene, camera);
   if (spineSelObj) { renderer.clearDepth(); const bg2 = scene.background; scene.background = null; withVisible(c => c === spineSelObj, () => renderer.render(scene, camera)); scene.background = bg2; }   /* the selected mass's spine over all of it */   /* the crisp spines last, over the selection's tint, so a lit stone's spine still shows */
   renderer.autoClear = true;
