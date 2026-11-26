@@ -1,5 +1,5 @@
-/* node design/rock-planes/mosaic.mjs <png> [page.html]: find the settings mosaic of Cliffs from Spines anywhere in a screenshot, read it, correct it
-   with Reed-Solomon, and print the state and camera it holds, decoded by the page's own decodeBits (cliffs.html beside this file by default; a
+/* node design/rock-planes/mosaic.mjs <png> [page.html]: find the settings mosaic of Cliffs from Spines anywhere in a screenshot (an L of one colour on a
+   contrasting quiet zone, whatever the colours), read it by the palette its clock shows, correct it with Reed-Solomon, and print the state and camera it holds, decoded by the page's own decodeBits (cliffs.html beside this file by default; a
    mosaic made by another version of the page needs that version, from git). Plain node, nothing to install. */
 import fs from 'node:fs'; import zlib from 'node:zlib'; import { fileURLToPath } from 'node:url';
 /* the page's settings code and mosaic, without the DOM: the engine's constants, then the page-state region up to the end of the settings code */
@@ -9,7 +9,7 @@ function load(file, eye = { position: [10, -50, 30], target: [0, 0, 20] }) {
   const a = src.indexOf('// ---------- page state ----------'), b = src.indexOf('// ---------- end of settings code ----------');
   const f = new Function('eye', eng + '\n' + src.slice(a, b) + `
     const camera = { position: { x: eye.position[0], y: eye.position[1], z: eye.position[2] } }, controls = { target: { x: eye.target[0], y: eye.target[1], z: eye.target[2] } };
-    return { encode, decode, encodeBits, decodeBits, codeBits, bytesOf, mosaicOf, mosaicWord, MOSAIC, rsParityCount, GF, GROUPS, PRESETS, DEFAULTS, SETTINGS, CODE_FP, VIEW, state, edited, baseOf, setEye(e) { camera.position.x = e.position[0]; camera.position.y = e.position[1]; camera.position.z = e.position[2]; controls.target.x = e.target[0]; controls.target.y = e.target[1]; controls.target.z = e.target[2]; } };`);
+    return { encode, decode, encodeBits, decodeBits, codeBits, bytesOf, mosaicOf, mosaicWord, MOSAIC, mosaicColours, rsParityCount, GF, GROUPS, PRESETS, DEFAULTS, SETTINGS, CODE_FP, VIEW, state, edited, baseOf, setEye(e) { camera.position.x = e.position[0]; camera.position.y = e.position[1]; camera.position.z = e.position[2]; controls.target.x = e.target[0]; controls.target.y = e.target[1]; controls.target.z = e.target[2]; } };`);
   return f(eye);
 }
 
@@ -33,7 +33,7 @@ function readPNG(buf) {
     else { data[q] = px[s]; data[q + 1] = px[s + 1]; data[q + 2] = px[s + 2]; data[q + 3] = ch === 4 ? px[s + 3] : 255; } }
   return { width: W, height: H, data };
 }
-const PAGE = process.argv[3] || fileURLToPath(new URL('cliffs.html', import.meta.url)), P = load(PAGE);
+const MAIN = process.argv[1] === fileURLToPath(import.meta.url), PAGE = (MAIN && process.argv[3]) || fileURLToPath(new URL('cliffs.html', import.meta.url)), P = load(PAGE);
 const { exp, log } = P.GF; const mul = (a, b) => a && b ? exp[log[a] + log[b]] : 0, inv = a => exp[255 - log[a]];
 /* Berlekamp-Massey over GF(256), roots 1, 2, 4, ...: the corrected word and the number of bytes it fixed, or null */
 export function rsDecode(word, nsym) {
@@ -61,26 +61,40 @@ export function rsDecode(word, nsym) {
 }
 const SIZES = P.MOSAIC.sizes;
 export function read(png) {
-  const { width: W, height: H, data } = png, at = (x, y) => (y * W + x) * 4;
-  const mx = (x, y) => Math.max(data[at(x, y)], data[at(x, y) + 1], data[at(x, y) + 2]);
-  const dark = (x, y) => x >= 0 && y >= 0 && x < W && y < H && mx(x, y) < 128;
-  const frac = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? 0 : Math.max(0, 1 - mx(x, y) / 255);
-  const tried = []; let lastError = 'no mosaic found';
-  const vrun = (x, y) => { let a = y, b = y; while (dark(x, a - 1)) a--; while (dark(x, b + 1)) b++; return [a, b]; };
-  const hrun = (x, y) => { let a = x, b = x; while (dark(a - 1, y)) a--; while (dark(b + 1, y)) b++; return [a, b]; };
+  const { width: W, height: H, data } = png, at = (x, y) => (y * W + x) * 4, inside = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+  const px = (x, y) => inside(x, y) ? [data[at(x, y)], data[at(x, y) + 1], data[at(x, y) + 2]] : [0, 0, 0], dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const TOL = 80; let lastError = 'no mosaic found';
+  /* the L is one colour (the seed): runs of pixels within TOL of it, and the fraction of it in an edge pixel, measured from the quiet zone's colour just outside */
+  const same = (x, y, seed) => inside(x, y) && dist(px(x, y), seed) < TOL;
+  const vrun = (x, y, seed) => { let a = y, b = y; while (same(x, a - 1, seed)) a--; while (same(x, b + 1, seed)) b++; return [a, b]; };
+  const hrun = (x, y, seed) => { let a = x, b = x; while (same(a - 1, y, seed)) a--; while (same(b + 1, y, seed)) b++; return [a, b]; };
+  /* how much of an edge pixel is the L's colour: its place on the line from the quiet zone's colour q to the seed */
+  const cover = (p, q, seed) => { const n = dist(q, seed) ** 2; return n < 1 ? 0 : Math.max(0, Math.min(1, ((p[0] - q[0]) * (seed[0] - q[0]) + (p[1] - q[1]) * (seed[1] - q[1]) + (p[2] - q[2]) * (seed[2] - q[2])) / n)); };
+  /* the quiet zone's colour just outside an edge: the one of the two pixels out from it that is most unlike the seed (the nearer may be part L) */
+  const outside = (x, y, dx, dy, seed) => { const a = px(x + dx, y + dy), b = px(x + 2 * dx, y + 2 * dy); return dist(a, seed) >= dist(b, seed) ? a : b; };
+  /* the edge's place from the run's last same pixel (x, y) going outward by (dx, dy): the pixel and the one beyond it hold what is left of a cell's width */
+  const edge = (x, y, dx, dy, seed) => { const q = outside(x, y, dx, dy, seed); return cover(px(x, y), q, seed) + cover(px(x + dx, y + dy), q, seed); };
   for (let x = 1; x < W; x++) for (let y = 0; y < H; y++) {
-    if (!dark(x, y) || dark(x, y - 1)) continue;
-    let [, y1] = vrun(x, y); if (y1 - y + 1 < 8) continue;
-    const mid = (y + y1) >> 1; if (dark(x - 1, mid)) continue;
+    /* a run starts at a pixel like the one two below it and unlike the one above it (the first pixel of an edge may be half quiet zone, so it is not the colour to compare with; the pixel above must be clearly unlike, so every edge has a start) */
+    const seed0 = px(x, y + 2); if (!same(x, y, seed0) || dist(px(x, y - 1), seed0) < 0.6 * TOL) continue;
+    let [, y1] = vrun(x, y, seed0); if (y1 - y + 1 < 8) continue;
+    /* the colour of the L is the mean of the middle of the run on the column of it that is most unlike the quiet zone (the first column may be part quiet) */
+    const mid = (y + y1) >> 1, q4 = (y1 - y) >> 2, seed = [0, 0, 0], quiet = outside(x - 1, mid, -1, 0, seed0).slice(), vx = same(x + 1, mid, seed0) && dist(px(x + 1, mid), quiet) > dist(px(x, mid), quiet) ? x + 1 : x; let cnt = 0;
+    for (let j = y + q4; j <= y1 - q4; j++) { const v = px(vx, j); for (let t = 0; t < 3; t++) seed[t] += v[t]; cnt++; }
+    for (let t = 0; t < 3; t++) seed[t] /= cnt;
+    if (same(x - 1, mid, seed)) continue;
     /* the column's ends are rounded by the corner pixels, so the run is taken at this column and the next */
-    const [ya, yb_] = vrun(x + 1, mid), [yc, yd] = vrun(x, mid); const top = Math.min(ya, yc), bot = Math.max(yb_, yd);
+    const [ya, yb_] = vrun(x + 1, mid, seed), [yc, yd] = vrun(x, mid, seed); const top = Math.min(ya, yc), bot = Math.max(yb_, yd);
     const Lv = bot - top + 1; if (Lv < 14 || Lv > 120) continue;
     y1 = bot; const y0 = top;
     for (const N of SIZES) {
-      const s = Lv / N, yr = Math.max(y0, Math.round(y1 - s / 2)); if (!dark(x, yr)) continue;
-      const [, xa] = hrun(x, yr), [, xb] = hrun(x, Math.max(y0, yr - 1)); const x1 = Math.max(xa, xb);
-      const Lh = x1 - x + 1; if (Math.abs(Lh - Lv) > 0.15 * s + 1.5) continue;
-      const xl = x - frac(x - 1, mid), xr = x1 + 1 + frac(x1 + 1, yr), yt = y0 - frac(x + 1, y0 - 1), yb = y1 + 1 + frac(x + 1, y1 + 1);
+      /* the bottom row of the L is read on the row of its last full pixels, taken at the second cell, where the cell above is not the L's colour */
+      const s = Lv / N, cx2 = Math.min(W - 1, x + Math.ceil(1.5 * s)), yr = dist(px(cx2, y1), seed) <= dist(px(cx2, y1 - 1), seed) ? y1 : y1 - 1; if (!same(cx2, yr, seed)) continue;
+      const [, xa] = hrun(x, yr, seed), [, xb] = hrun(x, Math.max(y0, yr - 1), seed); const x1 = Math.max(xa, xb);
+      const Lh = x1 - x + 1; if (Math.abs(Lh - Lv) > 0.15 * s + 3) continue;
+      /* the edges are measured on the column and the row that are most the L's colour (the bottom row's is the row it was found on), where the other direction's blend is least */
+      const cx = dist(px(x, mid), seed) <= dist(px(x + 1, mid), seed) ? x : x + 1;
+      const xl = x + 1 - edge(x, mid, -1, 0, seed), xr = x1 + edge(x1, yr, 1, 0, seed), yt = y0 + 1 - edge(cx, y0, 0, -1, seed), yb = y1 + edge(cx, y1, 0, 1, seed);
       const sx = (xr - xl) / N, sy = (yb - yt) / N;
       const sample = (r, c) => {
         const cx = xl + (c + 0.5) * sx, cy = yt + (r + 0.5) * sy, hx = 0.3 * sx, hy = 0.3 * sy; let n = 0, R = 0, G = 0, B = 0;
@@ -89,14 +103,16 @@ export function read(png) {
         return [R / n, G / n, B / n];
       };
       const cache = new Map(), cell = (r, c) => { const k = r * 64 + c; if (!cache.has(k)) cache.set(k, sample(r, c)); return cache.get(k); };
-      const isDark = v => Math.max(...v) < 128; let ok = true;
+      /* the borders: the left column and bottom row are the L's colour, the clock's even cells are too and its odd cells are another colour */
+      const Lc = [0, 1, 2].map(t => { let sum = 0; for (let i = 0; i < N; i++) sum += cell(i, 0)[t] + cell(N - 1, i)[t]; return sum / (2 * N); });
+      const near = v => dist(v, Lc) < 45; let ok = true;
       for (let i = 0; i < N && ok; i++) {
-        if (!isDark(cell(i, 0)) || !isDark(cell(N - 1, i))) ok = false;
-        if ((i % 2 === 0) !== isDark(cell(0, i))) ok = false;
-        if (((N - 1 - i) % 2 === 0) !== isDark(cell(i, N - 1))) ok = false;
+        if (!near(cell(i, 0)) || !near(cell(N - 1, i))) ok = false;
+        if ((i % 2 === 0) !== near(cell(0, i))) ok = false;
+        if (((N - 1 - i) % 2 === 0) !== near(cell(i, N - 1))) ok = false;
       }
       if (!ok) { lastError = `a border did not match N=${N} s=${sx.toFixed(2)}`; continue; }
-      /* calibration: black from the finder L, each other colour from every clock cell that shows it */
+      /* calibration: colour 0 from the finder L, each other colour from every clock cell that shows it */
       const acc = Array.from({ length: 8 }, () => ({ n: 0, v: [0, 0, 0] })), add = (k, v) => { acc[k].n++; for (let t = 0; t < 3; t++) acc[k].v[t] += v[t]; };
       for (let i = 0; i < N; i++) { add(0, cell(i, 0)); add(0, cell(N - 1, i)); if (i % 2 === 0) { add(0, cell(0, i)); } else add(1 + (((i - 1) >> 1) % 7), cell(0, i)); const j = N - 1 - i; if (j % 2 === 0) add(0, cell(i, N - 1)); else add(1 + (((j - 1) >> 1) % 7), cell(i, N - 1)); }
       const pal = acc.map(a => a.v.map(t => t / a.n)); let close = false;
@@ -113,7 +129,7 @@ export function read(png) {
   throw new Error(lastError);
 }
 export const readFile = f => read(readPNG(fs.readFileSync(f)));
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (MAIN) {
   const f = process.argv[2]; if (!f) { console.error('usage: node design/rock-planes/mosaic.mjs <png> [page.html]'); process.exit(2); }
   try {
     const r = readFile(f), { values, view } = r;
