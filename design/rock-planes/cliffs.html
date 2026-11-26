@@ -2375,19 +2375,22 @@ function paintSurf(surf, paint) {
 }
 /* the envelope as the structure view draws it: an outline of rods (each edge a thin rod, so it keeps its width at any zoom), all one thickness and
    colour: the crisp core (the box every stone fills for sure: up to the low end of Height, forward to the low end of Depth and as long as the low
-   end of Length) in solid rods, and where the top, the front or the ends are fuzzy the outline of their high ends in dashed ones; a face whose range
-   is one value has no dashed outline. The rods are in the glass's scenes like the spines: seen through a mass they are blurred and faded, in front of every mass crisp. */
-const ENV_CORE = [0x24, 0x40, 0x5F], ENV_ROD = 0.2, ENV_DASH = 1.4, ENV_GAP = 1.2;
+   end of Length) in solid rods, and where the top, the front or the ends are fuzzy the whole outer face (the box of every high end) outlined in dashed ones; a face whose range
+   is one value is the core's own face, solid. The outer box's volume is a faint translucent fill. Rods and fill are in the glass's scenes like the spines: seen through a mass they are blurred and faded, in front of every mass crisp. */
+const ENV_CORE = [0x24, 0x40, 0x5F], ENV_ROD = 0.2, ENV_DASH = 1.4, ENV_GAP = 1.2, ENV_FILL = 0.06;   /* ENV_FILL: how opaque the envelope's volume is drawn */
 function envelopeOf(V, P) {
   const grp = new THREE.Group(), x = V.hi[0], xl = Math.min(P.length[0] / 2, x), y1 = V.hi[1], hL = Math.min(P.height[0], V.hi[2]), hH = V.hi[2], dL = Math.min(P.depth[0], V.hi[1] - V.lo[1]), dH = V.hi[1] - V.lo[1], yc = y1 - dL;
   const rods = [], rod = (a, b) => rods.push([new THREE.Vector3(...a), new THREE.Vector3(...b)]);
   const dashed = (a, b) => { const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), L = A.distanceTo(B), d = B.clone().sub(A).normalize(); for (let t = 0; t < L - 1e-6; t += ENV_DASH + ENV_GAP) rods.push([A.clone().addScaledVector(d, t), A.clone().addScaledVector(d, Math.min(L, t + ENV_DASH))]); };
   const c = [[-xl, yc, 0], [xl, yc, 0], [xl, y1, 0], [-xl, y1, 0], [-xl, yc, hL], [xl, yc, hL], [xl, y1, hL], [-xl, y1, hL]];
   for (const [i, j] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) rod(c[i], c[j]);
-  const loop = (pts, f) => { for (let i = 0; i < pts.length; i++) f(pts[i], pts[(i + 1) % pts.length]); };
-  if (hH - hL > 1e-6) loop([[-x, yc, hH], [x, yc, hH], [x, y1, hH], [-x, y1, hH]], dashed);   /* the top: the high end of Height */
-  if (dH - dL > 1e-6) { const yf = y1 - dH; loop([[-x, yf, 0], [x, yf, 0], [x, yf, hL], [-x, yf, hL]], dashed); }   /* the front: the high end of Depth */
-  if (x - xl > 1e-6) for (const g of [-1, 1]) { const X = g * x; loop([[X, yc, 0], [X, y1, 0], [X, y1, hL], [X, yc, hL]], dashed); }   /* the ends: the high end of Length */
+  /* a fuzzy face is outlined whole, on the outer box (every high end): the top at the high Height, the front at the high Depth, the ends at the high Length; an edge two faces share is one dashed edge */
+  const yf = y1 - dH, o = [[-x, yf, 0], [x, yf, 0], [x, y1, 0], [-x, y1, 0], [-x, yf, hH], [x, yf, hH], [x, y1, hH], [-x, y1, hH]], seen = new Set();
+  const edge = (i, j) => { const k = Math.min(i, j) + '-' + Math.max(i, j); if (!seen.has(k)) { seen.add(k); dashed(o[i], o[j]); } };
+  const face = ids => { for (let i = 0; i < ids.length; i++) edge(ids[i], ids[(i + 1) % ids.length]); };
+  if (hH - hL > 1e-6) face([4, 5, 6, 7]);   /* the top */
+  if (dH - dL > 1e-6) face([0, 1, 5, 4]);   /* the front */
+  if (x - xl > 1e-6) { face([0, 3, 7, 4]); face([1, 2, 6, 5]); }   /* the ends */
   const cyl = new THREE.CylinderGeometry(ENV_ROD, ENV_ROD, 1, 6).toNonIndexed(), cp = cyl.attributes.position.array, n = cp.length / 3, pos = new Float32Array(rods.length * cp.length), up = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), m4 = new THREE.Matrix4(), v = new THREE.Vector3();
   rods.forEach(([A, B], k) => {
     const L = A.distanceTo(B); q.setFromUnitVectors(up, B.clone().sub(A).normalize()); m4.compose(A.clone().add(B).multiplyScalar(0.5), q, new THREE.Vector3(1, L, 1));
@@ -2396,6 +2399,12 @@ function envelopeOf(V, P) {
   const g = new THREE.BufferGeometry(), nv = pos.length / 3, col = new Uint8Array(3 * nv); for (let i = 0; i < nv; i++) col.set(ENV_CORE, 3 * i);
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3, true)); g.setAttribute('body', new THREE.BufferAttribute(new Float32Array(nv), 1));   /* body 0: no mass's own, so a rod is crisp only in front of the pane */
   const mesh = new THREE.Mesh(g, glassKit().spineBehind); mesh.renderOrder = 4; mesh.userData.spines = g; grp.add(mesh);
+  /* the volume: the outer box as twelve triangles, one colour, faint; drawn before the rods, never writing depth */
+  const T = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [3, 2, 6, 7], [0, 3, 7, 4], [1, 2, 6, 5]], fp = [];
+  for (const [a, b, c2, d] of T) for (const k of [a, b, c2, a, c2, d]) fp.push(...o[k]);
+  const fg = new THREE.BufferGeometry(), fn = fp.length / 3, fc = new Uint8Array(3 * fn); for (let i = 0; i < fn; i++) fc.set(ENV_CORE, 3 * i);
+  fg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3)); fg.setAttribute('color', new THREE.BufferAttribute(fc, 3, true)); fg.setAttribute('body', new THREE.BufferAttribute(new Float32Array(fn), 1));
+  const fill = new THREE.Mesh(fg, glassKit().fillBehind); fill.renderOrder = 3; fill.userData.spines = fg; fill.userData.fill = true; grp.add(fill);
   return grp;
 }
 // ---------- the reference miniature ----------
@@ -2669,16 +2678,16 @@ const glass = { rig: null, kit: null, W: 0, H: 0 };
 function glassKit() {
   if (glass.kit) return glass.kit;
   const shared = { tF: { value: null }, tD: { value: null }, res: { value: new THREE.Vector2(1, 1) }, eps: { value: GLASS_EPS }, fade: { value: GLASS_FADE }, bg: { value: new THREE.Color('#D9E0EB') } };
-  const spineMat = mode => new THREE.ShaderMaterial({
-    uniforms: { ...shared, mode: { value: mode } }, vertexColors: true, side: THREE.DoubleSide,
+  const spineMat = (mode, alpha = 1) => new THREE.ShaderMaterial({
+    uniforms: { ...shared, mode: { value: mode }, alpha: { value: alpha } }, vertexColors: true, side: THREE.DoubleSide, transparent: alpha < 1, depthWrite: alpha >= 1,
     vertexShader: 'attribute float body; varying float vB; varying vec3 vC; void main() { vB = body; vC = color; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform sampler2D tF, tD; uniform vec2 res; uniform float eps, fade, mode; uniform vec3 bg; varying float vB; varying vec3 vC;
+    fragmentShader: `uniform sampler2D tF, tD; uniform vec2 res; uniform float eps, fade, mode, alpha; uniform vec3 bg; varying float vB; varying vec3 vC;
       void main() {
         vec2 uv = gl_FragCoord.xy / res; vec4 f = texture2D(tF, uv);
         float id = floor(f.r * 255.0 + 0.5) * 256.0 + floor(f.g * 255.0 + 0.5);
         bool crisp = id < 0.5 || gl_FragCoord.z <= texture2D(tD, uv).r + eps || abs(id - floor(vB + 0.5)) < 0.5;
         if (crisp == (mode < 0.5)) discard;
-        gl_FragColor = vec4(mode < 0.5 ? mix(vC, bg, fade) : vC, 1.0);
+        gl_FragColor = vec4(mode < 0.5 ? mix(vC, bg, fade) : vC, alpha);
       }`
   });
   const quadMat = (uniforms, frag) => new THREE.ShaderMaterial({ uniforms, vertexShader: QUAD_VS, fragmentShader: frag, depthTest: false, depthWrite: false });
@@ -2691,7 +2700,7 @@ function glassKit() {
     fragmentShader: 'varying float vB; void main() { float id = floor(vB + 0.5); gl_FragColor = vec4(floor(id / 256.0) / 255.0, mod(id, 256.0) / 255.0, 0.0, 1.0); }', side: THREE.DoubleSide
   });
   const quadScene = new THREE.Scene(), quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), compose); quad.frustumCulled = false; quadScene.add(quad);
-  return glass.kit = { shared, spineBehind: spineMat(0), spineCrisp: spineMat(1), blur, compose, idMat, quadScene, quad, quadCam: new THREE.Camera() };
+  return glass.kit = { shared, spineBehind: spineMat(0), spineCrisp: spineMat(1), fillBehind: spineMat(0, ENV_FILL), fillCrisp: spineMat(1, ENV_FILL), blur, compose, idMat, quadScene, quad, quadCam: new THREE.Camera() };
 }
 /* the scenes of one shown wall, sharing its geometry: the masses' ids, the pane (a depth prepass then the pane), and the crisp spines */
 function glassRig() {
@@ -2699,7 +2708,7 @@ function glassRig() {
   rig.idScene.add(new THREE.Mesh(mass.geometry, K.idMat));
   addLights(rig.paneScene);
   const pre = new THREE.Mesh(mass.geometry, massPrepassMat), pane = new THREE.Mesh(mass.geometry, massMat); pre.renderOrder = 0; pane.renderOrder = 1; rig.paneScene.add(pre, pane);
-  extraObj.traverse(o => { if (o.userData.spines) { const m = new THREE.Mesh(o.userData.spines, K.spineCrisp); m.renderOrder = 5; rig.spineScene.add(m); } });
+  extraObj.traverse(o => { if (o.userData.spines) { const m = new THREE.Mesh(o.userData.spines, o.userData.fill ? K.fillCrisp : K.spineCrisp); m.renderOrder = o.userData.fill ? 4 : 5; rig.spineScene.add(m); } });
   glass.rig = rig;
 }
 function glassTargets(W, H) {
