@@ -3503,8 +3503,8 @@ function stonePage() {
   for (let q = 0; q < b.length; q++) { const a = q % 3; if (b[q] < lo[a]) lo[a] = b[q]; if (b[q] > hi[a]) hi[a] = b[q]; }
   const d = [0, 1, 2].map(a => (hi[a] - lo[a]).toFixed(1));
   const body = div('sp');
-  body.innerHTML = ln('Body', g) + ln('Layer', l >= 0 ? l : '') + ln('Fused with', mates) + ln('Size', b.length ? `${d[0]} long, ${d[1]} deep, ${d[2]} tall (mm)` : '') + ln('Rests on', stoneLinks(on)) + ln('Holds up', stoneLinks(up))
-    + (SEL.edge ? `<div class="edge">${edgeWords(SEL.edge)}</div>` : '<small class="note">Tap nearer an edge of the stone for its report.</small>');
+  body.innerHTML = (SEL.edge ? `<div class="edge">${edgeWords(SEL.edge)}</div>` : '') + ln('Body', g) + ln('Layer', l >= 0 ? l : '') + ln('Fused with', mates) + ln('Size', b.length ? `${d[0]} long, ${d[1]} deep, ${d[2]} tall (mm)` : '') + ln('Rests on', stoneLinks(on)) + ln('Holds up', stoneLinks(up))
+    + (SEL.edge ? '' : '<small class="note">Tap nearer an edge of the stone for its report.</small>');
   propBody.replaceChildren(body); pgProp.replaceChildren(backHead(`Stone ${i}`), propBody); propBody.scrollTop = 0;
   /* the stone's debug colour (its colour in the Rocks view, whatever the view) is the page's motif: its header is that colour, with ink that reads on it, and a band of it runs down the page */
   const lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
