@@ -56,7 +56,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ic .faint { stroke-width: 1; opacity: .5; }
 .ic .hid { stroke-width: 1; opacity: .3; stroke-dasharray: 1.5 1.5; }
 .ic .plane { fill: currentColor; fill-opacity: .45; stroke-width: 1.8; }
-.pbox.rng { width: 11ch; }
+.pbox.rng { width: 24ch; }
 .pbox { width: 6ch; height: 22px; padding: 0 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--bg); color: var(--ink); font: 600 14px var(--f-code); text-align: right; }
 /* the settings: the mosaic button (bottom right) opens a bottom sheet over the view; its top level lists the settings, a row slides to its group's page and a line's label to the setting's page */
 .vbtn.code { position: absolute; right: 10px; bottom: 10px; z-index: 3; display: block; width: auto; height: auto; min-width: 32px; min-height: 32px; padding: 5px; line-height: 0; }
@@ -98,7 +98,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .pval { flex: none; width: 78px; text-align: right; font: 600 13px var(--f-code); font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }   /* one width on every line, so the sliders line up */
 .pval .gh { visibility: hidden; font-style: normal; }   /* the room a decimal place takes, kept when the value is whole */
 .pval.r2 { display: flex; flex-direction: column; justify-content: center; font-size: 10.5px; line-height: 12px; }   /* a range: low end over high end */
-.slider .dim { position: absolute; top: 25px; height: 14px; box-sizing: border-box; display: flex; align-items: center; gap: 3px; border-left: 1px solid var(--muted); border-right: 1px solid var(--muted); color: var(--muted); font: 11px var(--f-code); white-space: nowrap; pointer-events: none; }   /* the distance between a range's ends, drawn as a dimension line */
+.slider .tick { position: absolute; top: 24px; width: 1px; height: 5px; margin-left: -0.5px; background: var(--muted); pointer-events: none; }
+.slider.one .tick { top: 8px; }
+.pline .slider:not(.one) .tick { top: 20px; }
+.slider .dim { position: absolute; top: 29px; height: 13px; box-sizing: border-box; display: flex; align-items: center; gap: 3px; border-left: 1px solid var(--muted); border-right: 1px solid var(--muted); color: var(--muted); font: 11px var(--f-code); white-space: nowrap; pointer-events: none; }   /* the distance between a range's ends, drawn as a dimension line */
 .slider .dim i { position: relative; flex: 1 1 0; min-width: 0; height: 1px; background: currentColor; }
 .slider .dim i::before { content: ""; position: absolute; top: -3px; width: 6px; height: 7px; background: currentColor; }
 .slider .dim i:first-child::before { left: 0; clip-path: polygon(0 50%, 100% 0, 100% 100%); }
@@ -300,7 +303,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
     <h2>How a cliff is built</h2>
     <ol>
       <li><b>Ranges.</b> Every setting drawn at random is a <b>range</b>: on its slider a handle under each end, the low end and the high end, and a grip above the band between them that moves the whole range (a number&rsquo;s slider is the same with one end); typed <code>low..high</code> (a number alone, <code>7</code>, is the range 7..7: always that). Each draw is made between the ends, every value as likely, from a stream of its own for the job (a stone, a spine, a layer face, a joint, a plane), so one setting never reshuffles another; Height and Depth are the exception, drawn mostly from a smooth field along the wall (below), so they wander rather than spread evenly.</li>
-      <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, <b>Squares</b> long, as tall as the high end of <b>Height</b> and as deep as the high end of <b>Depth</b>, standing at the back of the square. Its bottom, its back and its two ends (the tile&rsquo;s edges) are <b>crisp</b>: no stone crosses them. Its top and its front are <b>fuzzy</b>: each spine draws how tall it reaches in Height and how far forward in Depth, two thirds from a smooth field along the wall and one third its own, so neighbours stop at similar places and the silhouette wanders instead of being noise. The Structure view always draws it: a <b>crisp core</b> (edges and a faint fill), the box every stone fills for sure, up to the low end of Height and forward to the low end of Depth, and round its top and front a <b>paler band</b> that fades outward to a dashed outline at the high ends, where stones may or may not reach (a face whose range is one value has no band).</li>
+      <li><b>The envelope</b> is the space the cliff may fill: here a wall on the tile, as long as the high end of <b>Length</b>, as tall as the high end of <b>Height</b> and as deep as the high end of <b>Depth</b>, standing at the back of the square. Its bottom and its back are <b>crisp</b>: no stone crosses them, and when Length is one value its two ends (the tile&rsquo;s edges) are crisp too. Its top, its front and, when Length is a range, its two ends are <b>fuzzy</b>: each spine draws how tall it reaches in Height, how far forward in Depth and how far along the wall each end reaches in Length (each end from a stream of its own), two thirds from a smooth field along the wall (along each end) and one third its own, so neighbours stop at similar places and the silhouette wanders instead of being noise. The Structure view always draws it: a <b>crisp core</b> (edges and a faint fill), the box every stone fills for sure, up to the low end of Height, forward to the low end of Depth and as long as the low end of Length, and round its top, front and ends a <b>paler band</b> that fades outward to a dashed outline at the high ends, where stones may or may not reach (a face whose range is one value has no band).</li>
       <li><b>Layers and spines.</b> Every <b>Direction</b> is built the same way, only turned: the spines run up (Up), from the back to the front (Through) or along the wall (Along), and the envelope is cut across them into <b>Layers</b>. Each face where two layers meet is drawn on its own: it slopes along Width by an angle drawn in <b>Lean</b> and along Thickness by one drawn in <b>Pitch</b>, and curves along Width by a height drawn in <b>Sag</b> (its middle that far past its edges) and along Thickness by one drawn in <b>Bow</b>. A face never lies under the face below it, so where two cross, a layer pinches out. In each layer in turn spines are started by dart throwing: a dart is a point in the layer, its direction turned by an angle drawn in <b>Wander</b>; it is kept only if it is clear of every spine already in the layer by <b>Width</b> across the wall and <b>Thickness</b> front to back (each the two ends&rsquo; sizes together), and the layer is full when 80 darts in a row miss. A spine runs on into the next layer with the chance <b>Span</b>, drawn at each face it reaches, so breaks stagger. <b>Order</b> draws the darts&rsquo; places from a grid instead, its pitch the middle of Width by the middle of Thickness, every other layer moved half a Width so the joints alternate as in a laid wall; below 100% each place is moved at random by up to half of (100% &minus; Order) of a spacing along each axis, and at 0% there is no grid: the darts are thrown at random. A layer whose spines are at least <span data-const="COLUMN"></span> Widths long (a column) gives all its spines one lean along the wall, drawn in Wander, so neighbours stay parallel and none narrows against another.</li>
       <li><b>Cells.</b> Each spine is one convex stone, from the layer face it starts on to the one it stops at (each taken as its tangent plane at the spine there, so Sag and Bow become planes). Between it and each spine that shares a layer with it, the stone is cut by the plane halfway between the two spines&rsquo; closest points (measured with Thickness against Width as the proportion, a stretch of the whole wall, so planes stay planes), then by the envelope. The planes are drawn pair by pair and do not have to agree, so some space can be left to no stone. <b>Width</b> and <b>Thickness</b> space the spines; they do not move the planes. <b>Joint</b>, drawn for each pair, moves each side half of it from the halfway plane: over zero a gap opens (separate stones), under zero each reaches past it into its neighbour (they overlap). The cells are not a chain: every contact is known before any stone is carved, so every stone is carved on its own.</li>
       <li><b>Bodies.</b> A spine that runs through several layers is one stone, carved whole. <b>Fuse</b> joins two neighbouring spines whose cells share a face into one body, one draw for each two from a stream of the pair&rsquo;s own; a cell narrower than 3 mm across joins the neighbour it shares the most side face with. A body is carved cell by cell with the faces where its cells meet kept flat, so the slicer fuses them into one stone; a body that rests on nothing the ground holds is joined to a touching body that is held.</li>
@@ -890,7 +893,7 @@ function carveFast(kp, grd) { guardsOf(kp); toSlots(); supN = nVS; relocate(); b
 function wall(seed, P, opt = {}) {
   carveFor(P);
   const T = { }, t0 = now(); let tm = t0; const lap = k => { const t = now(); T[k] = t - tm; tm = t; };
-  const W = 35 * P.squares, H = P.height[1], D = P.depth[1], y0 = 17.5 - D, y1 = 17.5, hu = W / 2;
+  const W = P.length[1], H = P.height[1], D = P.depth[1], y0 = 17.5 - D, y1 = 17.5, hu = W / 2;
   /* The frame: every Direction is built the same way in it, only turned. Spines run along w (Up: up; Through: from the back to the front; Along: along
      the wall), u runs across them along Width and v along Thickness, and a point of the frame is O + u eU + v eV + w eW in the wall. The envelope, the
      ground and what holds what are the wall's, whichever way the frame is turned. */
@@ -928,7 +931,8 @@ function wall(seed, P, opt = {}) {
     fit[0] = sz / 9; fit[1] = sx / (6 * FHX); fit[2] = sy / (6 * FHY);
   }
   // ---- sites: darts in each layer across (u, v), clear of the spines through it (Width along u, Thickness along v), Span, Wander, fuzzy top and front
-  const fuzzTop = waves(stream(seed, 1)), fuzzFront = waves(stream(seed, 2)), FIELD = 2 / 3;
+  const fuzzTop = waves(stream(seed, 1)), fuzzFront = waves(stream(seed, 2)), fuzzEndL = waves(stream(seed, 3)), fuzzEndR = waves(stream(seed, 4)), FIELD = 2 / 3;
+  const HL = [P.length[0] / 2, P.length[1] / 2], FUZZY_ENDS = HL[0] !== HL[1];   /* each end's reach from the middle of the wall; with one value the ends are crisp */
   const short = (range, f, rf) => range[1] - lerp(range[0], range[1], clamp(0.5 + 0.5 * (FIELD * f + (1 - FIELD) * (2 * rf() - 1)), 0, 1));
   const sites = [], pw = 0.5 * (P.width[0] + P.width[1]), AB = 0.5 * (P.thickness[0] + P.thickness[1]) / pw;   // AB: the one aspect the planes are drawn in
   const layerSites = Array.from({ length: N - 1 }, () => []);
@@ -960,7 +964,9 @@ function wall(seed, P, opt = {}) {
       for (const o of here) { const dx = u - (o.u + o.su * (zmid - o.wd)), dy = (v - (o.v + o.sv * (zmid - o.wd))) / o.a; if (dx * dx + dy * dy < (o.r + rr) * (o.r + rr)) { clear = false; break; } }
       if (!clear && !GRID) { fails++; continue; }
       const rf = rd, pm = toW(u, v, zmid), sTop = short(P.height, fuzzTop(pm[0], pm[1]), rf), sFront = short(P.depth, fuzzFront(pm[0], pm[2]), rf);
-      const s = { id, i, j, u, v, wd: zmid, su: wcl ? wcl[0] : tn * Math.cos(phi), sv: wcl ? wcl[1] : tn * Math.sin(phi), r: rr, a, w: rr * rr, sTop, sFront, pieces: [] };
+      /* each end draws its reach from a stream of its own, keyed by the spine, so neither end reshuffles the other or any other draw */
+      const sEndL = FUZZY_ENDS ? short(HL, fuzzEndL(pm[1], pm[2]), stream(seed, 400000 + 2 * id)) : 0, sEndR = FUZZY_ENDS ? short(HL, fuzzEndR(pm[1], pm[2]), stream(seed, 400001 + 2 * id)) : 0;
+      const s = { id, i, j, u, v, wd: zmid, su: wcl ? wcl[0] : tn * Math.cos(phi), sv: wcl ? wcl[1] : tn * Math.sin(phi), r: rr, a, w: rr * rr, sTop, sFront, sEndL, sEndR, pieces: [] };
       sites.push(s); for (let l = i; l < j; l++) layerSites[l].push(s); k++; fails = 0;
     }
   }
@@ -969,7 +975,7 @@ function wall(seed, P, opt = {}) {
   // and each spine that shares a layer with it, the plane halfway between their closest points (drawn in the aspect AB, a stretch of the whole frame,
   // so planes stay planes), moved back half the pair's Joint (negative: the neighbours overlap). Unweighted: Width and Thickness space the spines,
   // they do not move the planes. The planes are drawn pair by pair, so some space can be left to no stone. Each plane's last entry: the spine across
-  // it, or -1 a layer face, -2 the fuzzy top, -3 the fuzzy front, -4 the ground, -5 the crisp back and ends.
+  // it, or -1 a layer face, -2 the fuzzy top, -3 the fuzzy front, -4 the ground, -5 the crisp back (and ends, when Length is one value), -6 the fuzzy ends.
   const pieces = [];
   /* a spine, once: its line is (u, v) = (s.u + s.su (w - s.wd), s.v + s.sv (w - s.wd)); each end is where that line meets its layer face (the face's
      fitted plane, found by iterating), with the face's slope there. The cutting planes, the end caps, holding and the view all read these ends */
@@ -1008,7 +1014,7 @@ function wall(seed, P, opt = {}) {
     const pl = [];   // [nx,ny,nz,d,kind,aux]
     for (const e of planesOfSpine(s)) pl.push([e[0], e[1], e[2], e[3], KIND.SIDE, e[4]]);
     // the envelope: crisp ends, back and ground, fuzzy front and top
-    pl.push([1, 0, 0, hu, KIND.CRISP, -5], [-1, 0, 0, hu, KIND.CRISP, -5], [0, 1, 0, y1, KIND.CRISP, -5], [0, 0, -1, 0, KIND.CRISP, -4], [0, -1, 0, -(y0 + s.sFront), KIND.ENV, -3], [0, 0, 1, H - s.sTop, KIND.ENV, -2]);
+    pl.push(FUZZY_ENDS ? [1, 0, 0, hu - s.sEndR, KIND.ENV, -6] : [1, 0, 0, hu, KIND.CRISP, -5], FUZZY_ENDS ? [-1, 0, 0, hu - s.sEndL, KIND.ENV, -6] : [-1, 0, 0, hu, KIND.CRISP, -5], [0, 1, 0, y1, KIND.CRISP, -5], [0, 0, -1, 0, KIND.CRISP, -4], [0, -1, 0, -(y0 + s.sFront), KIND.ENV, -3], [0, 0, 1, H - s.sTop, KIND.ENV, -2]);
     // its two ends: the tangent planes of the layer faces it starts and stops on
     pl.push([...plW(-et.gu, -et.gv, 1, et.w - et.gu * et.u - et.gv * et.v), KIND.TOP, -1], [...plW(eb.gu, eb.gv, -1, -(eb.w - eb.gu * eb.u - eb.gv * eb.v)), KIND.TOP, -1]);
     const cut = () => { initBox(-hu - 1, hu + 1, y0 - 1, y1 + 1, -1, H + 4); for (let i = 0; i < pl.length && !empty; i++) { const e = pl[i]; clip(e[0], e[1], e[2], e[3], e[4] | i << 4); } return !empty && nF >= 4; };
@@ -2359,12 +2365,12 @@ function paintSurf(surf, paint) {
   paint.faces.forEach((fi, k) => { const c = paint.red[k] ? OVER_RGB : BAND_RGB; for (let o = 9 * faceTri[fi], e = 9 * faceTri[fi + 1]; o < e; o += 3) { col[o] = c[0]; col[o + 1] = c[1]; col[o + 2] = c[2]; } });
   surf.paint = paint;
 }
-/* the envelope as the structure view draws it: a crisp core (the box every stone fills for sure: up to the low end of Height and forward to the low
-   end of Depth) with its edges as lines and a faint fill, and a paler band round it where the top and the front are fuzzy (up to the high ends), made of
+/* the envelope as the structure view draws it: a crisp core (the box every stone fills for sure: up to the low end of Height, forward to the low
+   end of Depth and as long as the low end of Length) with its edges as lines and a faint fill, and a paler band round it where the top, the front and the ends are fuzzy (up to the high ends), made of
    thin sheets that grow fainter outward and ended by a dashed outline; a face whose range is one value has no band */
 const ENV_RGB = 0x3F5878, ENV_CORE = 0x24405F;
 function envelopeOf(V, P) {
-  const grp = new THREE.Group(), x = V.hi[0], y1 = V.hi[1], hL = Math.min(P.height[0], V.hi[2]), hH = V.hi[2], dL = Math.min(P.depth[0], V.hi[1] - V.lo[1]), dH = V.hi[1] - V.lo[1], yc = y1 - dL;
+  const grp = new THREE.Group(), x = V.hi[0], xl = Math.min(P.length[0] / 2, x), y1 = V.hi[1], hL = Math.min(P.height[0], V.hi[2]), hH = V.hi[2], dL = Math.min(P.depth[0], V.hi[1] - V.lo[1]), dH = V.hi[1] - V.lo[1], yc = y1 - dL;
   const quad = (a, b, c, d) => [...a, ...b, ...c, ...a, ...c, ...d];
   const mesh = (pos, opacity) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: ENV_RGB, transparent: true, opacity, depthWrite: false, depthTest: false, side: THREE.DoubleSide })); grp.add(m); return m; };
   const lines = (pts, dashed, opacity) => {
@@ -2372,7 +2378,7 @@ function envelopeOf(V, P) {
     const m = new THREE.LineSegments(g, dashed ? new THREE.LineDashedMaterial({ color: ENV_RGB, dashSize: 1.4, gapSize: 1.2, transparent: true, opacity, depthTest: false }) : new THREE.LineBasicMaterial({ color: ENV_RGB, transparent: true, opacity, depthTest: false }));
     if (dashed) m.computeLineDistances(); grp.add(m);
   };
-  const c = [[-x, yc, 0], [x, yc, 0], [x, y1, 0], [-x, y1, 0], [-x, yc, hL], [x, yc, hL], [x, y1, hL], [-x, y1, hL]];
+  const c = [[-xl, yc, 0], [xl, yc, 0], [xl, y1, 0], [-xl, y1, 0], [-xl, yc, hL], [xl, yc, hL], [xl, y1, hL], [-xl, y1, hL]];
   const f = (i, j, k, l) => quad(c[i], c[j], c[k], c[l]);
   mesh([...f(0, 1, 2, 3), ...f(4, 5, 6, 7), ...f(0, 1, 5, 4), ...f(3, 2, 6, 7), ...f(0, 3, 7, 4), ...f(1, 2, 6, 5)], 0.05);
   for (const [i, j] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) {   /* crisp: each edge a thin rod, so it keeps its width at any zoom */
@@ -2388,6 +2394,11 @@ function envelopeOf(V, P) {
     for (let k = 0; k < N; k++) { const y = yc - (dH - dL) * (k + 0.5) / N; mesh(quad([-x, y, 0], [x, y, 0], [x, y, hL], [-x, y, hL]), fade(k)); }
     const yf = y1 - dH;
     lines([[-x, yf, 0], [x, yf, 0], [x, yf, 0], [x, yf, hL], [x, yf, hL], [-x, yf, hL], [-x, yf, hL], [-x, yf, 0]], true, 0.7);
+  }
+  if (x - xl > 1e-6) for (const g of [-1, 1]) {   /* the ends: upright sheets from the core's end to the high end of Length */
+    for (let k = 0; k < N; k++) { const X = g * (xl + (x - xl) * (k + 0.5) / N); mesh(quad([X, yc, 0], [X, y1, 0], [X, y1, hL], [X, yc, hL]), fade(k)); }
+    const X = g * x;
+    lines([[X, yc, 0], [X, y1, 0], [X, y1, 0], [X, y1, hL], [X, y1, hL], [X, yc, hL], [X, yc, hL], [X, yc, 0]], true, 0.7);
   }
   grp.userData.envelope = true; grp.traverse(o => { o.renderOrder = 8; });
   return grp;
@@ -2438,11 +2449,11 @@ function bigSolid(planes) { let p = boxPoly([-200, -200, -200], [200, 200, 200])
 // every style's height, exactly: a tall wall's top above the ground, DungeonBlocks' tall wall top, 72.3 dmm above the base, less ordinary ground's 3.5 (here 1 dmm is 1 mm)
 const TALL = 68.8;
 const PRESETS = {   // ranges are [lo, hi]
-  granite: { squares: 2, height: [TALL, TALL], depth: [5, 15], direction: 'through', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 15], width: [22, 30], thickness: [5, 16.5], order: 0, joint: [-10.8, -9.4], bevel: [1.4, 2], weather: [0, 0], cracks: 12.5, network: 'blocks', spacing: [3.5, 6.5], branching: 30, opening: [0.2, 0.5], wiggle: 88 },
-  columnar: { squares: 2, height: [TALL, TALL], depth: [12, 16], direction: 'up', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [5.5, 9.5], thickness: [6, 8], order: 0, joint: [-0.8, 0], bevel: [0.9, 1.5], weather: [0, 0], cracks: 19.5, network: 'columns', spacing: [3.5, 5.5], branching: 15, opening: [0.4, 0.6], wiggle: 20 },
-  layered: { squares: 2, height: [TALL, TALL], depth: [13, 16], direction: 'up', layers: 38, lean: [0, 6], pitch: [-2, 2], sag: [-1, 1], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [7, 17], thickness: [5.5, 8.5], order: 0, joint: [-0.8, 0], bevel: [0.4, 0.7], weather: [0, 0], cracks: 90, network: 'planes', spacing: [3, 5], branching: 25, opening: [0.4, 0.6], wiggle: 40 },
-  fieldstone: { squares: 2, height: [63.1, TALL], depth: [15.5, 16], direction: 'up', layers: 18, lean: [-1.5, 1.5], pitch: [0, 0], sag: [-5, 2.5], bow: [-0.5, 2.75], span: 30, fuse: 0, wander: [0, 15], width: [2.8, 5.8], thickness: [2, 8], order: 0, joint: [-1.9, 0], bevel: [0.5, 1], weather: [100, 100], cracks: 0, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
-  ashlar: { squares: 2, height: [TALL, TALL], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], bevel: [1.2, 1.6], weather: [0, 0], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
+  granite: { length: [70, 70], height: [TALL, TALL], depth: [5, 15], direction: 'through', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 15], width: [22, 30], thickness: [5, 16.5], order: 0, joint: [-10.8, -9.4], bevel: [1.4, 2], weather: [0, 0], cracks: 12.5, network: 'blocks', spacing: [3.5, 6.5], branching: 30, opening: [0.2, 0.5], wiggle: 88 },
+  columnar: { length: [70, 70], height: [TALL, TALL], depth: [12, 16], direction: 'up', layers: 1, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [5.5, 9.5], thickness: [6, 8], order: 0, joint: [-0.8, 0], bevel: [0.9, 1.5], weather: [0, 0], cracks: 19.5, network: 'columns', spacing: [3.5, 5.5], branching: 15, opening: [0.4, 0.6], wiggle: 20 },
+  layered: { length: [70, 70], height: [TALL, TALL], depth: [13, 16], direction: 'up', layers: 38, lean: [0, 6], pitch: [-2, 2], sag: [-1, 1], bow: [0, 0], span: 0, fuse: 0, wander: [0, 6], width: [7, 17], thickness: [5.5, 8.5], order: 0, joint: [-0.8, 0], bevel: [0.4, 0.7], weather: [0, 0], cracks: 90, network: 'planes', spacing: [3, 5], branching: 25, opening: [0.4, 0.6], wiggle: 40 },
+  fieldstone: { length: [70, 70], height: [63.1, TALL], depth: [15.5, 16], direction: 'up', layers: 18, lean: [-1.5, 1.5], pitch: [0, 0], sag: [-5, 2.5], bow: [-0.5, 2.75], span: 30, fuse: 0, wander: [0, 15], width: [2.8, 5.8], thickness: [2, 8], order: 0, joint: [-1.9, 0], bevel: [0.5, 1], weather: [100, 100], cracks: 0, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
+  ashlar: { length: [70, 70], height: [TALL, TALL], depth: [15.5, 16], direction: 'up', layers: 8, lean: [0, 0], pitch: [0, 0], sag: [0, 0], bow: [0, 0], span: 0, fuse: 0, wander: [0, 0], width: [9.5, 12.5], thickness: [15, 17], order: 100, joint: [-0.4, 0], bevel: [1.2, 1.6], weather: [0, 0], cracks: 15, network: 'blocks', spacing: [3.5, 5.5], branching: 20, opening: [0.3, 0.5], wiggle: 30 },
 };
 const STYLES = [['granite', 'Granite', 'Points on the back of the wall, each a stone running straight through to the front, growing to fill its space and overlapping into one irregular mass'], ['columnar', 'Columns', 'Points on the ground, each an upright column filling its space, a hair apart'], ['layered', 'Layered', 'Many thin level layers, a handful of flat slabs in each, the joints staggered'], ['fieldstone', 'Fieldstone', 'A dry wall of irregular, roundish stones placed at random in rough courses, some running up through the next course, no cracks'], ['ashlar', 'Ashlar', 'Stacked courses, stones regularly spaced, each course moved half a stone so the joints alternate'], ['random', 'Random', 'One of the styles above, picked at random']];
 const DEFAULTS = { style: 'layered', ...PRESETS.layered, bridge: 15, draw: 'rocks', crackLines: false, lines: true, bevelsOn: true, mini: true };
@@ -2455,6 +2466,8 @@ function showValue(out, input, unit) {
   out.innerHTML = `<span class="ip" style="min-width:${digits}ch">${ip}</span><span class="fp" style="width:${places ? places + 1 : 0}ch">${fp ? '.' + fp : ''}</span>${unit ? `<span class="un">${unit}</span>` : ''}`;
 }
 const MM = '&nbsp;mm';
+const STICK = 6;   /* px */
+const SQUARE = { word: 'square', mm: 35 };   /* a setting's unit: a value that is a whole number of them is written in them ("2 squares"), else in mm; its slider has ticks at their multiples that hold the handles */
 // the settings' icons (each also heads its page in the sheet)
 const svg = (body, cls = '', vb = '0 0 24 24') => `<svg class="ic ${cls}" viewBox="${vb}" aria-hidden="true">${body}</svg>`;
 const ICON = {
@@ -2479,8 +2492,8 @@ const GROUPS = [
     { key: 'style', label: 'Style', own: true, choices: STYLES.filter(s => PRESETS[s[0]]).map(s => [s[0], s[1]]) }] },
   { label: 'Seed', icon: () => ICON.seed, value: 'seed', page: 'seed', items: [
     { key: 'seed', label: 'Seed', own: true, min: 0, max: 1048575, step: 1, unit: '' }] },
-  { label: 'Envelope', icon: () => ICON.envelope, value: 'squares', items: [
-    P_('squares', 'Squares', 1, 3, 1, '', 'How many 35 mm squares long the wall is.'),
+  { label: 'Envelope', icon: () => ICON.envelope, value: 'length', items: [
+    R_('length', 'Length', 20, 105, 0.5, SQUARE, 'The wall’s length along itself, in squares or mm (Width, in Structure, is the spacing of spines along the wall): each end of the wall is drawn in this range, mostly from a smooth field along the end, so it wanders. The envelope is as long as the high end.'),
     R_('height', 'Height', 6, 80, 0.1, MM, 'How tall each stone reaches: drawn in this range, mostly from a smooth field along the wall, so neighbours stop at similar heights and the top wanders. The envelope is as tall as the high end.'),
     R_('depth', 'Depth', 4, 35, 0.5, MM, 'How far forward each stone reaches from the back of the square, drawn the same way, so the front wanders. The back is crisp.')] },
   { label: 'Structure', icon: () => dirIcon(state.direction), value: 'layers', items: [
@@ -2734,7 +2747,7 @@ function drawGlass() {
 let renderer, scene, camera, persp, ortho, controls, rockObj = null, extraObj = null, mini = null, thumbR, thumbScene, thumbPersp, thumbOrtho;
 const homeDir = () => new THREE.Vector3(34, -50, 30).normalize();
 const focus = () => new THREE.Vector3(0, 17.5 - state.depth[1] / 2, state.height[1] / 2);
-const reachOf = () => Math.max(35 * state.squares, state.height[1]) * 2.3;
+const reachOf = () => Math.max(state.length[1], state.height[1]) * 2.3;   /* the camera's distance: the high ends of Length and Height */
 function initGL() {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -3047,8 +3060,23 @@ function rebuildThumbs() {
 }
 
 // controls
+/* a setting with a unit ({ word, mm }) writes a value that is a whole number of them in them ("1 square", "2 squares"), any other in mm ("80 mm"), each end of a range on its own; sp is what stands between a number and its word */
+const isU = p => !!p.unit && typeof p.unit === 'object';
+const sfx = p => isU(p) ? MM : p.unit || '';
+const amount = (p, v, sp = '&nbsp;') => {
+  if (isU(p) && v > 0 && Math.abs(v / p.unit.mm - Math.round(v / p.unit.mm)) < 1e-9) { const n = Math.round(v / p.unit.mm); return `${n}${sp}${p.unit.word}${n === 1 ? '' : 's'}`; }
+  return isU(p) ? `${v}${sp}mm` : v + sfx(p);
+};
+const rangeAmount = (p, [lo, hi], sp) => lo === hi ? amount(p, lo, sp) : `${amount(p, lo, sp)}..${amount(p, hi, sp)}`;
+/* what is typed for a setting with a unit: "70", "70 mm", "2 squares", or two of them as low..high */
+function parseAmounts(p, t) {
+  const one = x => { const m = /^\s*(-?\d*\.?\d+)\s*(squares?|mm)?\s*$/i.exec(x); return m ? +m[1] * (m[2] && m[2].toLowerCase() !== 'mm' ? p.unit.mm : 1) : null; };
+  const parts = t.split('..'); if (parts.length > 2) return null;
+  const v = parts.map(one); if (v.some(x => x === null)) return null;
+  return v.length === 1 ? [v[0], v[0]] : v[0] <= v[1] ? v : [v[1], v[0]];
+}
 // a setting's value as HTML
-const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.range) return rangeText(v) + (p.unit || ''); if (p.choices) { const c = p.choices.find(x => x[0] === v); return (p.icon ? p.icon(v) : '') + c[1]; } const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
+const fmt = (p, v) => { if (p.bool) return v ? 'on' : 'off'; if (p.range) return isU(p) ? rangeAmount(p, v) : rangeText(v) + (p.unit || ''); if (p.choices) { const c = p.choices.find(x => x[0] === v); return (p.icon ? p.icon(v) : '') + c[1]; } const box = document.createElement('span'); showValue(box, { step: p.step, max: p.max, value: v }, p.unit); return box.innerHTML; };
 /* one editor for each kind of setting, sized by the container it is put in: control(p) gives { el, paint } (paint shows the settings as they are). A number is its slider and a box to type in, a range its twin slider and a box
    (the slider slim on a line of a group page, wide on a property page), a choice a button for each (on a narrow container icons alone where it has them), a switch a checkbox */
 function control(p, opts) {
@@ -3083,15 +3111,16 @@ function control(p, opts) {
 /* a distance between a range's ends as text, in the setting's unit */
 const distText = (p, d) => {
   const places = (String(p.step).split('.')[1] || '').length; let t = d.toFixed(places); if (t.includes('.')) t = t.replace(/0+$/, '').replace(/\.$/, '');
-  return t + (p.unit || '').replace('&nbsp;', ' ');
+  return isU(p) ? amount(p, +t, ' ') : t + (p.unit || '').replace('&nbsp;', ' ');
 };
-const valueText = p => p.range ? rangeText(state[p.key]) : String(state[p.key]);
+const valueText = p => p.range ? isU(p) ? rangeAmount(p, state[p.key], ' ') : rangeText(state[p.key]) : String(state[p.key]);
 /* one number of a setting for a readout: its unit, and room for one decimal place at least (a whole value gets an invisible ".0", so the digits stay where they are as the value changes) */
 function readNum(p, v) {
+  if (isU(p) && v > 0 && Math.abs(v / p.unit.mm - Math.round(v / p.unit.mm)) < 1e-9) return amount(p, v);
   const places = (String(p.step).split('.')[1] || '').length, want = Math.max(1, places);
   let t = (+v).toFixed(places); if (t.includes('.')) t = t.replace(/0+$/, '').replace(/\.$/, '');
   const [ip, fp = ''] = t.split('.'), ghost = (fp ? '' : '.') + '0'.repeat(want - fp.length);
-  return `${ip}${fp ? '.' + fp : ''}<i class="gh">${ghost}</i>${p.unit || ''}`;
+  return `${ip}${fp ? '.' + fp : ''}<i class="gh">${ghost}</i>${sfx(p)}`;
 }
 /* the value shown, read-only, beside the slider on a line of a group page: { el, paint } */
 function readout(p) {
@@ -3106,7 +3135,7 @@ function typed(p) {
   Object.assign(box, { type: 'text', inputMode: 'decimal', value: valueText(p), className: p.range ? 'pbox rng' : 'pbox' }); box.setAttribute('aria-label', p.range ? p.label + ', low..high' : p.label);
   const set = v => { if (!same(v, state[p.key])) { state[p.key] = v; update(); } };
   box.addEventListener('input', () => {
-    if (p.range) { const v = parseRange(box.value); if (v) set(v.map(x => snapTo(p, x))); }
+    if (p.range) { const v = isU(p) ? parseAmounts(p, box.value) : parseRange(box.value); if (v) set(v.map(x => snapTo(p, x))); }
     else { const x = parseFloat(box.value); if (Number.isFinite(x)) set(snapTo(p, x)); }
   });
   box.addEventListener('change', () => { box.value = valueText(p); });
@@ -3116,7 +3145,7 @@ function typed(p) {
 /* a number's or a range's ends (propEnds), under its control on a property page; none for a choice or a switch */
 function propEnds(p) {
   if (p.choices || p.bool) return null;
-  const e = div('ends'); e.innerHTML = `<span>${p.range ? p.min + (p.unit || '') : fmt(p, p.min)}</span><span>${p.range ? p.max + (p.unit || '') : fmt(p, p.max)}</span>`; return e;
+  const e = div('ends'); e.innerHTML = `<span>${p.range ? isU(p) ? amount(p, p.min) : p.min + (p.unit || '') : fmt(p, p.min)}</span><span>${p.range ? isU(p) ? amount(p, p.max) : p.max + (p.unit || '') : fmt(p, p.max)}</span>`; return e;
 }
 const ALT_NOTE = 'Hold Alt (Option) while dragging an end, or pressing an arrow on it, to move both ends together about the centre.';
 const help = p => { const h = document.createElement('small'); h.textContent = p.help + (p.range ? ' ' + ALT_NOTE : ''); return h; };
@@ -3133,17 +3162,24 @@ function slider(p, get, put, opts = {}) {
   const pos = x => `calc(var(--pad) + (100% - 2 * var(--pad)) * ${Math.min(1, Math.max(0, (x - p.min) / span))})`;
   const valueAt = cx => { const r = el.getBoundingClientRect(), pad = 10; return p.min + (cx - r.left - pad) / Math.max(1, r.width - 2 * pad) * span; };
   const handle = (cls, label) => { const h = document.createElement('span'); h.className = cls; h.tabIndex = 0; h.setAttribute('role', 'slider'); h.setAttribute('aria-label', label); h.setAttribute('aria-valuemin', p.min); h.setAttribute('aria-valuemax', p.max); el.append(h); return h; };
+  /* a setting with a unit has a tick at each multiple of it; a handle (or the grip) dragged within STICK px of one holds on it until dragged past */
+  const ticks = isU(p) ? Array.from({ length: Math.floor(p.max / p.unit.mm) + 1 }, (_, k) => k * p.unit.mm).filter(t => t >= p.min && t <= p.max) : [];
+  for (const t of ticks) { const k = document.createElement('span'); k.className = 'tick'; k.style.left = pos(t); el.append(k); }
+  const stick = x => { const r = el.getBoundingClientRect(), per = Math.max(1, r.width - 20) / span; for (const t of ticks) if (Math.abs(x - t) * per <= STICK) return t; return x; };
   const ends = twin ? [handle('end lo', `${p.label}, low end`), handle('end hi', `${p.label}, high end`)] : [handle('end', p.label)];
   const grip = twin ? handle('grip', `${p.label}, whole range`) : null;
   // a new end: a range's kept in order; the whole range moved by d, its width kept, inside the track
-  const withEnd = (e, x) => { x = snapTo(p, x); if (!twin) return [x]; const [a, b] = get(); return e === 0 ? [Math.min(x, b), b] : [a, Math.max(x, a)]; };
+  const withEnd = (e, x, sticky) => { x = snapTo(p, sticky ? stick(x) : x); if (!twin) return [x]; const [a, b] = get(); return e === 0 ? [Math.min(x, b), b] : [a, Math.max(x, a)]; };
   /* an end moved to x with the other going the opposite way about the centre (Alt): the range stays centred, inside the track */
-  const withEndSym = (e, x) => {
+  const withEndSym = (e, x, sticky) => {
     if (!twin) return [snapTo(p, x)];
+    if (sticky) x = stick(x);
     const [a, b] = get(), c = (a + b) / 2, half = Math.max(0, Math.min(e === 0 ? c - x : x - c, c - p.min, p.max - c)), lo = snapTo(p, c - half);
     return [lo, Math.min(p.max, +(2 * c - lo).toFixed(4))];
   };
-  const moved = ([a, b], d) => { const w = b - a, lo = snapTo(p, Math.min(p.max - w, Math.max(p.min, a + d))); return [lo, +(lo + w).toFixed(4)]; };
+  const moved = ([a, b], d, sticky) => {
+    if (sticky) { let best = null; for (const x of [a + d, b + d]) { const q = stick(x); if (q !== x && (best === null || Math.abs(q - x) < Math.abs(best))) best = q - x; } if (best !== null) d += best; }
+    const w = b - a, lo = snapTo(p, Math.min(p.max - w, Math.max(p.min, a + d))); return [lo, +(lo + w).toFixed(4)]; };
   const dim = twin && opts.dim ? Object.assign(document.createElement('span'), { className: 'dim', innerHTML: '<i></i><span class="dt"></span><i></i>' }) : null;
   if (dim) el.append(dim);
   /* the distance between the ends, shown only where the text and an arrow on each side fit between the handles */
@@ -3168,9 +3204,9 @@ function slider(p, get, put, opts = {}) {
     const s = start(e), mv = ev => set(move(s, ev)), up = () => { h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); };
     h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
   }; h.addEventListener('pointerdown', begin); return begin; };
-  const begins = ends.map((h, e) => drag(h, () => null, (_, ev) => (ev.altKey ? withEndSym : withEnd)(e, valueAt(ev.clientX))));
+  const begins = ends.map((h, e) => drag(h, () => null, (_, ev) => (ev.altKey ? withEndSym : withEnd)(e, valueAt(ev.clientX), true)));
   if (twin) for (const h of ends) h.title = ALT_NOTE;
-  if (grip) drag(grip, e => ({ v: get(), x: valueAt(e.clientX) }), (s, ev) => moved(s.v, valueAt(ev.clientX) - s.x));
+  if (grip) drag(grip, e => ({ v: get(), x: valueAt(e.clientX) }), (s, ev) => moved(s.v, valueAt(ev.clientX) - s.x, true));
   el.addEventListener('pointerdown', e => {
     if (e.target !== el && !e.target.classList.contains('track')) return;
     const x = valueAt(e.clientX), v = get(), e0 = !twin || x <= v[0] ? 0 : x >= v[1] ? 1 : x - v[0] <= v[1] - x ? 0 : 1;
@@ -3192,7 +3228,7 @@ function slider(p, get, put, opts = {}) {
    group, then the code with the camera as text to copy, paste into or edit, and as a large QR. The pages are a stack three deep: a row opens its group's page (a line for each setting, its label button and its control), a line's button
    opens the setting's page; Back and Escape go back one, Close and a tap outside close the sheet */
 const sheetEl = $('sheet'), slides = $('slides'), pgTop = $('pgTop'), pgGroup = $('pgGroup'), pgProp = $('pgProp'), rowsEl = $('srows'), codeBtn = $('code'), field = $('codefield'), codeErr = $('codeerr'), said = $('said');
-const plain = (p, v) => p.range ? rangeText(v) + (p.unit || '') : p.choices ? p.choices.find(c => c[0] === v)[1] : v + (p.unit || '');
+const plain = (p, v) => p.range ? isU(p) ? rangeAmount(p, v) : rangeText(v) + (p.unit || '') : p.choices ? p.choices.find(c => c[0] === v)[1] : v + (p.unit || '');
 const summary = g => plain(g.items.find(p => p.key === g.value), state[g.value]) + (g.note ? g.note() : '');
 /* a QR of text in alphanumeric mode, the smallest version that fits, at error correction M unless that costs more than one version over L */
 function qrOf(text) {
