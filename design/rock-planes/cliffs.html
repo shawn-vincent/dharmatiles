@@ -364,7 +364,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>The bottom.</b> The stones are placed holders first (a stone can hold another only when its spine ends below the middle of the other&rsquo;s and starts lower, so a neighbour beside it never comes first and one it overlaps deeply does), and each in turn finds what holds it among the stones placed before it, as they stand. Its bottom reaches down to what is under it: it is lowered, kept parallel, until it lies in every top under it within <span data-const="GAPMAX"></span> mm (or on the plate, when the plate is that near), measured at the corners of its outline and every mm inside it, so where its own plane and the tops under it part, it sinks into them. The stones print as one solid, so where they overlap nothing hangs. Then the stone is held wherever another stone (or the plate) lies just under its surface. Each face that looks down, a side face too, is clipped by each stone placed before it as that stone stands, and a holder keeps those places from carving. A <b>flare</b> keeps the cone over the held places: all that lies within <span data-const="FLARE_DEG"></span>&deg; of upright above one (for each direction in plan, the plane at that angle through the held place farthest out). What is left of a face past <span data-const="OVER"></span>&deg; that nothing holds would hang, and is cut off by the plane at <span data-const="FLARE_DEG"></span>&deg; that touches it from inside (of the directions within 45&deg; of the way out from the held places, the one that keeps the most held surface), the largest first. Every plane that cuts a stone faces down less than <span data-const="OVER"></span>&deg;, and a convex stone has no point of a face past <span data-const="OVER"></span>&deg; within <span data-const="FLARE_DEG"></span>&deg; above another of its points, so once those pieces are cut off every face of the stone past <span data-const="OVER"></span>&deg; is held. A stone held nowhere is cut away whole. Where a stone holds another, its top keeps flat the place the stone above rests on most. Every stone rests on the ground or on a stone that does.</li>
       <li><b>Rocks.</b> Each cell is carved alone, by the same rules whatever the style: the stone is its cell, and every edge that will be seen (two faces turning at least <span data-const="BEV_FLAT"></span>&deg;, the edge not buried in another stone, and a point just outside it in no other stone: overlapping stones whose faces run flush meet flat, with no groove) gets one flat bevel, cut the same distance in on both faces, so at the middle angle between them: <b>Bevel</b> wide (drawn between its two ends at each end of the edge), at most <span data-const="BEV_INR%"></span> of the narrower face&rsquo;s inradius, longest edges first. The bottom, the flat tops under stones above, and the faces where a body&rsquo;s cells meet are kept as they are; no plane is made that faces down past <span data-const="OVER"></span>&deg;, so every overhang left is the bottom&rsquo;s own, and a bevel that would cut what is kept is moved out to it, or not made if less than a third of a nozzle is left. A stone stays inside its cell; Joint is at most &minus;0.2 mm, so neighbouring stones always reach into each other. The stones are left as separate shells, not joined: the slicer fuses them. Draw shows the wall three ways. <b>Finished</b> is the stones as they print: a natural grey that runs a little warm, each stone its own, lit like the rest, the cracks dark and the overhang painted orange (55 to 65&deg;) or red (past 65&deg;), with no outlines. <b>Rocks</b> is the same stones for debugging: each in its own vivid colour, every edge outlined, the bevels paler, the crack network drawn (the lines that became cracks solid, the lines a crack could have followed and did not dashed and fainter) and the overhang painted. <b>Structure</b> is the cells as cut, before carving, each body its own shade, as frosted glass, with the spines, the layer faces and the envelope. A tap selects a stone (a mass, in Structure), outlined in yellow, with its spine in Structure, and opens its page in the sheet (Parts, then the stone: its body, layer and size, what it rests on and what it holds up, as links to those stones); in Finished and Rocks a tap near an edge selects that edge too, drawn in cyan with its report on the stone&rsquo;s page, and the selection stays when the view changes. A tap on empty space clears it, and so does closing the sheet; the mosaic button opens the sheet at its top level. <b>Round</b> cuts each stone by an egg of its own shape as the stone is placed, before it is held, just holding the stone at 0% and just inside it at 100%, so corners go first, then edges, then the faces dome. Where it meets another stone (its bottom, its sides against its neighbours, the places on its top the stones above meet) it keeps the meeting but the rim, drawn in by the bevel&rsquo;s width, and a ground stone keeps its whole bottom; the stones on either side give up the same rim, and where a stone above then reaches past a rounded rim, holding cuts that part off at the overhang target. So the wall&rsquo;s back and ends round as its front does, and the joints open into grooves, never through. <b>Faceting</b>, after the bevels, gives each seen face (but the wall&rsquo;s back and ends) a few broad flat facets: planes tilted 6 to 14&deg; off the face toward directions round it, each cutting from a hinge line inside the face down to its rim, taking off at most the drawn depth there (the hinge lies that depth over the tangent of the tilt in from the rim, and no nearer the face&rsquo;s middle than a fifth of the way out), so the face becomes a low convex mound with ridges where facets meet. The wall&rsquo;s crisp back and ends stay flat. Each facet obeys the same rule as a bevel: none faces down past <span data-const="OVER"></span>&deg;, none cuts what a stone rests on or carries, none is cut where the face it would cut lies under another stone, and one under 0.12 mm is not made; each stone&rsquo;s page counts its facets made and why any were not. <b>Weathering</b> rounds each seen convex edge to an arc of the drawn radius, after the bevels (so a bevel is worn, its two edges rounded, not lost): the stone a ball of that radius rolls around inside, made of planes tangent to it, turning in steps under <span data-const="BEV_FLAT"></span>&deg; so the arc reads as a curve and is never bevelled again. Flat faces stay flat. Each plane obeys the same rule as a bevel&rsquo;s: none faces down past <span data-const="OVER"></span>&deg; (an arc on an underside stops there), and none cuts what a stone rests on or carries (a facet such a place holds back pivots on it and tapers, as a bevel does); stones are carved from the top down, so what a stone above rests on or is held by is kept only where that stone, as carved, still has an underside past 55&deg;; so the stone stays convex, held and printable by construction, and the cracks are cut into it after.</li>
       <li><b>Cracks</b> (each style sets its own: Granite 12.5% on a Blocks network, Columns 19.5% on a Columns network, Layered 90% on a Planes network, Fieldstone none, Ashlar 15%; under Rocks, whose page in the settings sheet shows the other crack settings only while Cracks is above 0%) follow one hidden <b>Network</b> over the whole cliff: a table of flat boundaries between cells of seeds on a grid, in one, two or three axes: <b>Planes</b> across the vertical (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread, and each boundary carrying the rank at which a crack would reach it (cracks start at even shares and grow from line to line, turning least, branching with the chance <b>Branching</b>, <span data-const="CRACK_LINES"></span> lines to a crack on average). The table is made once for each Network, Spacing and Branching (the first wall that needs one waits for it) and the wall takes it at a seeded offset. Where a boundary crosses a stone&rsquo;s upright or upward faces it is a trace, and it is cut where those faces are the wall&rsquo;s outside (front, top, back and ends alike) or bevels, not where one stone meets another; <b>Cracks</b> picks each stone&rsquo;s own share of its traces&rsquo; length, in rank order, so raising it only adds cracks, and a crack never runs from one stone into another. A boundary a face meets at less than <span data-const="GRAZE"></span>&deg; (it would take off a skin) takes none. A trace is walked in short steps (<b>Wiggle</b>: each step <span data-const="WIGGLE_STEP"></span> mm, its heading turned by up to this share of <span data-const="WIGGLE_TURN"></span>&deg; and kept within the share, so a crack meanders), and cut as a groove of one V: two walls that meet in a sharp line, each <span data-const="GROOVE"></span>&deg; off the face&rsquo;s inward normal, <b>Opening</b> apart at the face (at most <span data-const="OPENING_MOST"></span> mm), so on an upright face its roof faces down at the overhang target whichever way the crack runs, and a wall that would face down past it is turned up to it. A free end tapers to nothing, its depth falling 1 in <span data-const="TAPER"></span>; an end that meets another crack, or the stone&rsquo;s outline where it touches another stone or the ground, runs off at full size; and a stretch that holds a stone (where it rests, or wherever a face of it that looks down lies on this one) or lies on a bottom is left whole. Each face the grooves touch is cut in its own plane into the convex pieces outside them, and merged back to as few as keep it convex. The faces inside a crack are drawn dark grey.</li>
-      <li><b>Flaking</b> hollows shallow scars into every seen face, last, after the cracks, like the flake scars of knapped flint. It is the one concave step, made of two parts kept apart. The <i>field</i> is a height under a plane, a function of the plane alone (and the wall&rsquo;s seed): the deepest of elliptical scoops, one to each cell of a lattice laid on the plane, each a paraboloid of a depth drawn from the range, its narrow radius twice that over the tangent of 25&deg; (so no rim is steeper) and its long one up to 1.8 times longer, turned at random; where two meet a sharp ridge stands, and the mesh is cut along it, so a ridge is an edge, not a zigzag. A plane is known by its key (its normal to a thousandth, its offset to a hundredth of a mm), so the faces of different stones on one plane, the wall&rsquo;s back and ends where stones overlap, read the same scoops and the same mesh, and the scars run across the joints. The <i>mask</i> says where a face may not be cut: its seen rims (an edge no other stone continues, a crack&rsquo;s lips among them), what another stone covers or rests on (held within 0.2 mm, so looked for just above the face and straight up), what a stone overlapping it would bare (its bottom or side within the depth under the face), and what a stone rests on; there the height is zero, and elsewhere no lower than a slope of at most 50&deg; from those places (less on a face with less headroom) (0.5 mm and one mesh step past a covered place). A rim another stone continues is cut on, and a skirt from the rim as it was to the rim as cut closes the shell inside that stone. Every slope is lowered by a face&rsquo;s headroom under <span data-const="OVER"></span>&deg;, and a thin triangle that would still face down past it is lifted to its shallowest corner, so nothing new overhangs. Bottoms, flares, bevels, arcs and the cut tops the stones above bear on stay flat. Faceting is per stone and convex; Flaking is per plane and concave. Each stone&rsquo;s page counts its flaked faces.</li>
+      <li><b>Flaking</b> hollows shallow scars into the finished wall, last, after the cracks, like the flake scars of knapped flint: the one concave step. The <i>field</i> is a depth under a plane, a function of the plane alone (and the wall&rsquo;s seed): the deepest of elliptical scoops, one to each cell of a lattice laid on the plane, each a paraboloid of a depth drawn from the range, its narrow radius twice that over the tangent of 25&deg; and its long one up to 1.8 times longer, turned at random; where two meet a sharp ridge stands, and the mesh is cut along it. A plane is known by its key (its normal to a thousandth, its offset to a hundredth of a mm), so the faces of different stones on one plane, the wall&rsquo;s back and ends, take the same scoops across the joints. The stone is then one formula: what lies under every face&rsquo;s plane pushed in by its field, and outside its cracks&rsquo; cutters. So a scoop runs off an edge and chips it, an edge stays only where neither face is scooped, and a crack cuts straight through the scarred surface. Each face is meshed on a lattice in its own plane, cut exactly where another face takes over and along its ridges. A face takes no scoops only where another stone lies in front of it by more than a scoop goes, or rests on what a scoop would take, and climbs to that place no steeper than 60&deg;. A face leaning down takes the same scoops made shallower, so no scar faces down past 63&deg;; one with almost no headroom stays flat. Faceting is per stone and convex; Flaking is per plane and concave. Each stone&rsquo;s page counts its flaked triangles.</li>
       <li><b>Overhang is painted after the wall is shown.</b> The wall appears as soon as it is built; a pass over the finished stones then marks every downward face past <span data-const="OVER"></span>&deg; that is not held, and the page paints it orange (55 to 65&deg;) or red (past 65&deg;), and reports each share of the downward area and the area unsupported. A downward face is held where another stone lies under it (within 0.2 mm), or on a line between two held places of its own stone at most Bridge apart; the ground holds what touches it. A face is painted whole when any of it is unheld. Each of orange and red may be 0.1% of the downward area. Red and orange on a model mean overhang only; the inside of a crack is dark grey.</li>
     </ol>
     <p class="hint"><b>Layered</b>: thin layers (Reach 1.4 to 2.4 mm), a handful of slabs in each, the joints staggered, with cracks along Planes. <b>Granite</b>: Direction Through, one layer (Reach longer than the wall is deep): every spine runs from the back to the front, and the stones show their ends; Joint under zero, so they overlap into one irregular mass; cracks along Blocks. <b>Columns</b>: one layer (Reach longer than the wall is tall), the full height, so every spine is one upright column from a point on the ground, a hair apart; cracks along Columns. <b>Fieldstone</b>: rough courses (Reach 2.8 to 4.8 mm), the stones thrown at random (Order 0%), many-faced and tilted so they read round; Span 30% lets a stone run up through the next course; no cracks. <b>Ashlar</b>: courses of one Reach (8.6 mm), level, Order 100%, so each course is a row of stones a Width apart, every other course moved half a stone; cracks along Blocks.</p>
@@ -1845,7 +1845,7 @@ function crackWall(w, P, seed, cracks) {
     const faces = st.faces; let lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
     for (const f of faces) for (const v of f.v) for (let j = 0; j < 3; j++) { if (v[j] < lo[j]) lo[j] = v[j]; if (v[j] > hi[j]) hi[j] = v[j]; }
     let nf = faces;
-    if (!st.joiner) { const r = crackStone(st, faces, net, lo, hi, P, seed, cracks, shifted, off, acc); if (r) { nf = r.faces; nCut += r.cutters; cutStones++; skipped += r.bad; st.cracked = true; } }
+    if (!st.joiner) { const r = crackStone(st, faces, net, lo, hi, P, seed, cracks, shifted, off, acc); if (r) { nf = r.faces; nCut += r.cutters; cutStones++; skipped += r.bad; st.cracked = true; st.uncut = faces; st.cut = r.cut; } }
     Object.defineProperty(st, 'faces', { value: nf, writable: true, configurable: true, enumerable: true });
     for (const f of nf) nTri += f.v.length - 2;
   }
@@ -1967,7 +1967,7 @@ function crackStone(st, faces, net, lo, hi, P, seed, cracks, shifted, off, acc) 
   
   if (!cutters.length) return null;
   const rb = rebuild(faces, body, cutters); 
-  return { faces: rb, cutters: cutters.length, bad };
+  return { faces: rb, cutters: cutters.length, bad, cut: cutters };
 }
 function distPoly(H, p) {
   const poly = H.poly, m = poly.length, dn = dot(H.n, sub(p, poly[0])), q = sub(p, mul(H.n, dn)); let best = Infinity;
@@ -2298,180 +2298,248 @@ function passII(w, opt = {}) {
   return { unsupported: unsup, unsupportedFaceArea: unsupFace, downTotal: total, red, orange, bridged: bridgedArea, faces, ms: now() - t0, indexMs: tIndex, intervals: tot, res: R };
 }
 // a wall, cracked: the cells and carving, then the grooves (Cracks above 0%)
-/* Flaking: shallow hollow scars like the flake scars of knapped flint, cut on the finished wall, after the cracks. It is the one concave step, so it
-   is not a plane cut; it is two things kept apart.
-   The field: a height under a plane, a pure function of the plane and the wall's seed: the deepest of elliptical paraboloid scoops, one to each cell
-   of a lattice laid on the plane, each h = -d max(0, 1 - u² - v²) in its own axes (d drawn from the range; its minor radius 2d / tan(slope), so no
-   rim is steeper than the slope; its major radius drawn longer; turned at random). Where two scoops meet a sharp ridge stands. A plane is known by
-   its key (its normal to 1/QN, its offset to 1/QB mm), so faces of different stones on one plane (the wall's crisp back and ends, where stones
-   overlap) read the same scoops and the same mesh lattice by construction, and the union shows them running across the joints.
-   The mask: where a face may not be cut, the height is zero, and elsewhere it is no lower than tan(slope) times the distance to the nearest such
-   place, so a face keeps by construction its seen rims (an edge another stone does not continue: the face's own edges and a crack's lips stay
-   crisp), what another stone covers (no hollow opens under it), and what a stone rests on or carries. A rim another stone continues is no such
-   place: the field runs on to it, and a skirt from the rim as it was to the rim as cut keeps the shell closed (it lies inside that stone).
-   The slope is FLAKE.slope, lowered by a face's headroom under the overhang target (a face with less than FLAKE.flat degrees of it stays flat), and
-   every height is the larger of slopes no steeper, so no surface turns down past the target. Fine roughness, later, is another term of the field. */
+/* Flaking: shallow hollow scars like the flake scars of knapped flint, made last, on the finished wall (after the cracks).
+   The field: a depth under a plane, a pure function of the plane's key (its normal to 1/QN, its offset to 1/QB mm) and the wall's seed: the deepest
+   of elliptical paraboloid scoops, one to each cell of a lattice laid on the plane, each h = -d max(0, 1 - u² - v²) in its own axes (d drawn from
+   the range; its minor radius 2d / tan(slope), so no rim is steeper than the slope; its major radius drawn longer; turned at random). Where two
+   meet a sharp ridge stands, and the mesh is cut along it. Faces of different stones on one plane read the same scoops.
+   The stone: each face's plane, pushed in by its field, is a surface, and the stone is what lies inside all of them and outside its cracks' cutters
+   (each a convex block): one formula, so a scoop runs off an edge and chips it, an edge stays only where neither face is scooped, a face too narrow
+   for a scoop is taken away, and a crack cuts straight through the scarred surface. Each surface is laid out on a lattice in its own plane, cut where
+   another surface takes over (found by bisection, so the pieces meet) and along its ridges.
+   What stays: a face's field is nothing where another stone lies in front of it by more than the deepest scoop (it covers the face) or rests on
+   what a scoop would take, climbing to it no steeper than the cliff slope. A plane with less headroom under 65 degrees than the flat setting takes
+   no scoops, and on one with less than the slope its scoops are made shallower, so no scar faces down past the target. */
 const FLAKE = {
   lo: 0, hi: 0,          // the deepest a scoop goes, mm: the control's range (0 in every preset: none)
-  slope: 25,             // a scoop's steepest rim, degrees
-  rimSlope: 50,          // the mask's slope up to a kept place, degrees (both lowered by a face's headroom under the overhang target)
-  flat: 2,               // a face with less headroom than this under the overhang target stays flat
+  slope: 25,             // a scoop's steepest rim, degrees (on a face with less headroom than this under 65 degrees, the same scoops made shallower)
+  flat: 2,               // a face with less headroom than this under 65 degrees stays flat
   elong: [1, 1.8],       // a scoop's major radius over its minor, drawn
   cell: 1.1,             // the lattice's cell (one scoop each), over the mean minor radius
-  grid: 0.2, gridMin: 0.4, gridMax: 0.8,   // the mesh step, over the mean minor radius, kept between these (mm)
-  off: [0.05, 0.15, 0.25, 0.4],   // mm off a face at which a point counts as covered by another stone (any: a stone resting on it is held within 0.2 mm, and a rounded one is thin at its rim)
-  keep: 0.5,             // mm round what another stone covers or rests on that stays whole too (its edge is measured to a tenth of a mm)
-  rim: 0.3,              // mm past an edge, and under the face, at which another stone continues it
-  sinKeep: Math.sin((OVER - 0.5) * DEG),   // no triangle of a scar faces down past this
+  grid: 0.3, gridMin: 0.3, gridMax: 0.8,   // the mesh step, over the mean minor radius, kept between these (mm)
+  off: 0.1,              // mm past the deepest scoop at which another stone in front covers a face, and the step down the column where another stone rests on what a scoop could take
+  cliff: 60,             // the steepest slope up to a covered place, degrees from the face (gentler where it would face down past 63 degrees)
+  bisect: 9,             // halvings that find where one surface gives way to another
   QN: 1000, QB: 100,     // a plane's key: its normal to 1/1000, its offset to 1/100 mm
   SALT: 7300,            // the scoops' stream (hash2 with the wall's seed and the plane's key), apart from every other
 };
 function flakeWall(w, seed) {
   const lo = FLAKE.lo, hi = FLAKE.hi, t0 = now(); if (!(hi > 0)) return null;
-  const stones = w.stones, planes = new Map();
-  // every stone's body, as the planes of its faces (a crack's walls left out), for "is this point in another stone"
-  const bodies = stones.map(s => { const pl = [], l = [1e9, 1e9, 1e9], h = [-1e9, -1e9, -1e9]; for (const f of s.faces) { for (const v of f.v) for (let j = 0; j < 3; j++) { if (v[j] < l[j]) l[j] = v[j]; if (v[j] > h[j]) h[j] = v[j]; } if (!f.crack) pl.push(f.n[0], f.n[1], f.n[2], dot(f.n, f.v[0])); } return { l, h, pl }; });
+  const stones = w.stones, planes = new Map(), bk = (a, b) => (a + 1048576) * 2097152 + b + 1048576;
+  const bodyOf = s => s.uncut || s.faces;
+  // every stone's body, as the planes of its faces before the cracks, for "is this point in another stone"
+  const tn0 = Math.tan(FLAKE.slope * DEG), g = Math.min(FLAKE.gridMax, Math.max(FLAKE.gridMin, FLAKE.grid * (lo + hi) / tn0));   // one mesh step for every plane
+  const lift = 1.1 * g;
+  const bodies = stones.map(s => { const pl = [], l = [1e9, 1e9, 1e9], h = [-1e9, -1e9, -1e9]; for (const f of bodyOf(s)) { for (const v of f.v) for (let j = 0; j < 3; j++) { if (v[j] < l[j]) l[j] = v[j]; if (v[j] > h[j]) h[j] = v[j]; } pl.push(f.n[0], f.n[1], f.n[2], dot(f.n, f.v[0])); } return { l, h, pl }; });
   const BK = 4, bucket = new Map(), bi = x => Math.floor(x / BK) + 512, bk3 = (a, b, c) => (a * 1024 + b) * 1024 + c;
   bodies.forEach((B, i) => { for (let a = bi(B.l[0]); a <= bi(B.h[0]); a++) for (let b = bi(B.l[1]); b <= bi(B.h[1]); b++) for (let c = bi(B.l[2]); c <= bi(B.h[2]); c++) { const k = bk3(a, b, c); (bucket.get(k) || bucket.set(k, []).get(k)).push(i); } });
-  const inOther = (p, self) => { const L = bucket.get(bk3(bi(p[0]), bi(p[1]), bi(p[2]))); if (!L) return false;
-    for (const j of L) { if (j === self) continue; const B = bodies[j]; if (p[0] < B.l[0] || p[0] > B.h[0] || p[1] < B.l[1] || p[1] > B.h[1] || p[2] < B.l[2] || p[2] > B.h[2]) continue;
+  // another stone holds p up from below it: it reaches p lifted by a lattice step (so the lattice cannot miss the strip under its edge), but not p itself (one p lies in already changes nothing when p is taken away)
+  const restsOn = (p, self, skip) => { const pu = [p[0], p[1], p[2] + lift], L = bucket.get(bk3(bi(pu[0]), bi(pu[1]), bi(pu[2]))); if (!L) return false;
+    for (const j of L) { if (j === self || (skip && skip.has(j))) continue; if (inBody(j, pu) && !inBody(j, p)) return true; } return false; };
+  const inBody = (j, p) => { const B = bodies[j]; if (p[0] < B.l[0] || p[0] > B.h[0] || p[1] < B.l[1] || p[1] > B.h[1] || p[2] < B.l[2] || p[2] > B.h[2]) return false; for (let q = 0; q < B.pl.length; q += 4) if (B.pl[q] * p[0] + B.pl[q + 1] * p[1] + B.pl[q + 2] * p[2] > B.pl[q + 3] - 1e-6) return false; return true; };
+  const bucketsNear = (l, h, r) => { const o = new Set(); for (let a = bi(l[0] - r); a <= bi(h[0] + r); a++) for (let b = bi(l[1] - r); b <= bi(h[1] + r); b++) for (let c = bi(l[2] - r); c <= bi(h[2] + r); c++) { const L = bucket.get(bk3(a, b, c)); if (L) for (const j of L) o.add(j); } return [...o]; };
+  const inOther = (p, self, skip) => { const L = bucket.get(bk3(bi(p[0]), bi(p[1]), bi(p[2]))); if (!L) return false;
+    for (const j of L) { if (j === self || (skip && skip.has(j))) continue; const B = bodies[j]; if (p[0] < B.l[0] || p[0] > B.h[0] || p[1] < B.l[1] || p[1] > B.h[1] || p[2] < B.l[2] || p[2] > B.h[2]) continue;
       let ok = true; for (let q = 0; q < B.pl.length && ok; q += 4) if (B.pl[q] * p[0] + B.pl[q + 1] * p[1] + B.pl[q + 2] * p[2] > B.pl[q + 3] - 1e-6) ok = false; if (ok) return true; }
     return false; };
-  // a plane's field, from its key alone
+
+  // a plane's field, from its key alone: H(u, v) <= 0 in the plane's own axes, and the scoop it came from (pl.win; -1: none)
   const plane = (kn, kb) => { const k = kn.join(',') + ',' + kb; if (planes.has(k)) return planes.get(k);
-    const n = unit([kn[0] / FLAKE.QN, kn[1] / FLAKE.QN, kn[2] / FLAKE.QN]), slope0 = Math.asin(Math.max(-1, Math.min(1, n[2]))) / DEG + OVER - 1, slope = Math.min(FLAKE.slope, slope0); let pl = null;
+    const n = unit([kn[0] / FLAKE.QN, kn[1] / FLAKE.QN, kn[2] / FLAKE.QN]), slope0 = Math.asin(Math.max(-1, Math.min(1, n[2]))) / DEG + 64, slope = Math.min(FLAKE.slope, slope0); let pl = null;
     if (slope >= FLAKE.flat) {
-      const tn = Math.tan(slope * DEG), bm = (lo + hi) / tn, S = FLAKE.cell * bm, amax = 2 * hi / tn * FLAKE.elong[1], g = Math.min(FLAKE.gridMax, Math.max(FLAKE.gridMin, FLAKE.grid * bm));
-      const e1 = unit(Math.abs(n[0]) < 0.9 ? [0, -n[2], n[1]] : [n[2], 0, -n[0]]), e2 = cross(n, e1), key = hash2(hash2(hash2(hash2(hash2(seed, FLAKE.SALT), kn[0]), kn[1]), kn[2]), kb), cells = new Map();
-      const scoop = (ci, cj) => { const ck = (ci + 1048576) * 2097152 + cj + 1048576; if (cells.has(ck)) return cells.get(ck); const r = j => hash2(hash2(hash2(key, ci), cj), j) / 4294967296, d = lo + (hi - lo) * r(2); let sc = null;
-        if (d > 0.01) { const b = 2 * d / tn, a = b * (FLAKE.elong[0] + (FLAKE.elong[1] - FLAKE.elong[0]) * r(3)), th = r(4) * Math.PI, c = Math.cos(th), s = Math.sin(th);
-          sc = { id: nid++, x: (ci + r(0)) * S, y: (cj + r(1)) * S, d, A: c * c / (a * a) + s * s / (b * b), B: 2 * c * s * (1 / (a * a) - 1 / (b * b)), C: s * s / (a * a) + c * c / (b * b) }; }
-        cells.set(ck, sc); return sc; };
-      let nid = 0; const H = (x, y) => { let z = 0, win = -1; const c0 = Math.floor((x - amax) / S), c1 = Math.floor((x + amax) / S), r0 = Math.floor((y - amax) / S), r1 = Math.floor((y + amax) / S);
-        for (let ci = c0; ci <= c1; ci++) for (let cj = r0; cj <= r1; cj++) { const p = scoop(ci, cj); if (!p) continue; const dx = x - p.x, dy = y - p.y, q = 1 - (p.A * dx * dx + p.B * dx * dy + p.C * dy * dy); if (q > 0 && -p.d * q < z) { z = -p.d * q; win = p.id; } }
+      const tn = Math.tan(slope * DEG), sq = tn / tn0, bm = (lo + hi) / tn0, S = FLAKE.cell * bm;   // on a face with less headroom the same scoops, shallower
+      const e1 = unit(Math.abs(n[0]) < 0.9 ? [0, -n[2], n[1]] : [n[2], 0, -n[0]]), e2 = cross(n, e1), key = hash2(hash2(hash2(hash2(hash2(seed, FLAKE.SALT), kn[0]), kn[1]), kn[2]), kb);
+      // a cell's scoop: [x, y, d, A, B, C, half width, half height] (d 0: none), made when first read
+      const own = new Map(), scoop = (ci, cj) => { const ck = bk(ci, cj); let a = own.get(ck); if (a) return a; a = new Float64Array(8); own.set(ck, a);
+        const r = j => hash2(hash2(hash2(key, ci), cj), j) / 4294967296, d0 = lo + (hi - lo) * r(2), d = d0 * sq; if (!(d > 0.005)) return a;
+        const b = 2 * d0 / tn0, al = b * (FLAKE.elong[0] + (FLAKE.elong[1] - FLAKE.elong[0]) * r(3)), th = r(4) * Math.PI, c = Math.cos(th), s = Math.sin(th);
+        const A = c * c / (al * al) + s * s / (b * b), B = 2 * c * s * (1 / (al * al) - 1 / (b * b)), C = s * s / (al * al) + c * c / (b * b), det = A * C - B * B / 4;
+        a[0] = (ci + r(0)) * S; a[1] = (cj + r(1)) * S; a[2] = d; a[3] = A; a[4] = B; a[5] = C; a[6] = Math.sqrt(C / det); a[7] = Math.sqrt(A / det); return a; };
+      // each cell's list of the scoops that reach into it, made when first read
+      const amax = 2 * hi / tn0 * FLAKE.elong[1], R = Math.ceil(amax / S) + 1, lists = new Map();
+      const list = (ci, cj) => { const ck = bk(ci, cj); let L = lists.get(ck); if (L) return L; L = [];
+        const x0 = ci * S, x1 = x0 + S, y0 = cj * S, y1 = y0 + S;
+        for (let a = ci - R; a <= ci + R; a++) for (let b = cj - R; b <= cj + R; b++) { const s = scoop(a, b); if (!s[2] || s[0] + s[6] < x0 || s[0] - s[6] > x1 || s[1] + s[7] < y0 || s[1] - s[7] > y1) continue; L.push(s, bk(a, b)); }
+        lists.set(ck, L); return L; };
+      const H = (x, y) => { let z = 0, win = -1; const L = list(Math.floor(x / S), Math.floor(y / S));
+        for (let i = 0; i < L.length; i += 2) { const a = L[i], dx = x - a[0], dy = y - a[1], q = 1 - (a[3] * dx * dx + a[4] * dx * dy + a[5] * dy * dy); if (q > 0 && -a[2] * q < z) { z = -a[2] * q; win = L[i + 1]; } }
         pl.win = win; return z; };
-      const rt = Math.tan(Math.min(FLAKE.rimSlope, slope0) * DEG); pl = { n, e1, e2, tn, rt, g, H, R: hi / rt, win: -1 }; }
+      pl = { n, e1, e2, H, win: -1, sq }; }
     planes.set(k, pl); return pl; };
-  const tri3 = (a, b, c, want) => { const q = cross(sub(b, a), sub(c, a)), L = len(q); if (L < 1e-10) return null; let nn = mul(q, 1 / L), v = [a, b, c]; if (dot(nn, want) < 0) { nn = mul(nn, -1); v = [a, c, b]; } return { v, n: nn, kind: KIND.SCAR, area: L / 2 }; };
+  const tri3 = (a, b, c, want, kind) => { const q = cross(sub(b, a), sub(c, a)), L = len(q); if (L < 1e-12) return null; let nn = mul(q, 1 / L), v = [a, b, c]; if (dot(nn, want) < 0) { nn = mul(nn, -1); v = [a, c, b]; } return { v, n: nn, kind, area: L / 2, mesh: true }; };
+  const keyOf = f => f.n.map(x => Math.round(x * FLAKE.QN)).join(',') + ',' + Math.round(dot(f.n, f.v[0]) * FLAKE.QB);
+  const onPlane = new Map(); stones.forEach((s, si) => { for (const f of bodyOf(s)) { const k = keyOf(f); (onPlane.get(k) || onPlane.set(k, new Set()).get(k)).add(si); } });   // the stones with a face on each plane: the same scoops cut them
   let nFaces = 0, nSteep = 0, deepest = 0;
   stones.forEach((st, si) => {
-    const faces = st.faces, VC = new Map(), cv = p => { const k = EK(p); let c = VC.get(k); if (!c) VC.set(k, c = p); return c; };   // one position for each corner, whichever face names it
-    const ekey = (a, b) => { const ka = EK(a), kb = EK(b); return ka < kb ? [ka + '|' + kb, false] : [kb + '|' + ka, true]; };
-    const edges = new Map(); faces.forEach((f, fi) => { for (let k = 0; k < f.v.length; k++) { const [key] = ekey(f.v[k], f.v[(k + 1) % f.v.length]); (edges.get(key) || edges.set(key, []).get(key)).push(fi); } });
-    const grp = new Map(), gOf = new Array(faces.length).fill(null);
-    faces.forEach((f, fi) => { if (f.crack || f.kind === KIND.BOT || f.kind === KIND.FLARE || f.kind === KIND.BEVEL || f.kind === KIND.PART || f.kind === KIND.WEAR || f.kind === KIND.TOP || f.v.length < 3) return; const kn = f.n.map(x => Math.round(x * FLAKE.QN)), kb = Math.round(dot(f.n, f.v[0]) * FLAKE.QB), pl = plane(kn, kb); if (!pl) return;   // (bevels and arcs are narrow strips: scars there would be noise; a stone's cut top is where the stones above bear)
-      const cov = p => FLAKE.off.some(o => inOther(add(p, mul(f.n, o)), si) || (f.n[2] > 0.05 && inOther(add(p, [0, 0, o]), si))); let c = [0, 0, 0]; for (const v of f.v) c = add(c, v); c = mul(c, 1 / f.v.length);   // (straight up too: a stone resting on a sloping face is held where it lies just above it)
-      if (cov(c) && f.v.every(cov)) return;   // a face another stone hides is left as it is
-      const k = kn.join(',') + ',' + kb; if (!grp.has(k)) grp.set(k, { pl, fs: [], nf: f.n, bf: dot(f.n, f.v[0]) }); grp.get(k).fs.push(fi); gOf[fi] = k; });
-    if (!grp.size) return;
-    // each flaked face's lattice lines where they cross its edges, gathered for each edge (t along it, from its first corner by key), so a neighbour shares them
-    const ept = new Map(), uv = (pl, p) => [dot(p, pl.e1), dot(p, pl.e2)];
-    for (const [, G] of grp) for (const fi of G.fs) { const f = faces[fi], m = f.v.length, g = G.pl.g;
-      for (let k = 0; k < m; k++) { const A = cv(f.v[k]), B = cv(f.v[(k + 1) % m]), [key, rev] = ekey(A, B), a = uv(G.pl, A), b = uv(G.pl, B), L = ept.get(key) || ept.set(key, []).get(key);
-        for (let ax = 0; ax < 2; ax++) { const s0 = a[ax], s1 = b[ax]; if (Math.abs(s1 - s0) < 1e-12) continue; for (let i = Math.ceil(Math.min(s0, s1) / g); i <= Math.floor(Math.max(s0, s1) / g); i++) { const t = (i * g - s0) / (s1 - s0); if (t > 1e-7 && t < 1 - 1e-7) L.push(rev ? 1 - t : t); } } } }
-    for (const [k, L] of ept) { L.sort((x, y) => x - y); const o = []; for (const t of L) if (!o.length || t - o[o.length - 1] > 1e-7) o.push(t); ept.set(k, o); }
-    // an edge's points from A to B (A and B included), each exactly where its neighbour has it
-    const along = (A, B) => { const [key, rev] = ekey(A, B), C0 = rev ? B : A, C1 = rev ? A : B, ts = ept.get(key) || [], out = [[A, 0]]; const tl = rev ? ts.map(t => 1 - t).reverse() : ts;
-      for (const t of tl) { const tc = rev ? 1 - t : t; out.push([[C0[0] + tc * (C1[0] - C0[0]), C0[1] + tc * (C1[1] - C0[1]), C0[2] + tc * (C1[2] - C0[2])], t]); } out.push([B, 1]); return out; };
-    const repl = new Array(faces.length).fill(null);
-    for (const [gk, G] of grp) {
-      const pl = G.pl, n = pl.n, verts = [], vkey = new Map(), skirts = [], tris = [], segs = [], cells = [];   // segs: the seen rims, in the plane's axes
-      const addV = (u, v, p) => { const k = (Math.round(u * 1e5) + 16777216) * 33554432 + Math.round(v * 1e5) + 16777216; let i = vkey.get(k); if (i === undefined) { i = verts.length; verts.push({ u, v, p, forb: false }); vkey.set(k, i); } else if (p && !verts[i].p) verts[i].p = p; return i; };
-      for (const fi of G.fs) {
-        const f = faces[fi], m = f.v.length, C = f.v.map(cv), P2 = C.map(p => uv(pl, p)); let ar = 0; for (let k = 0; k < m; k++) { const j = (k + 1) % m; ar += P2[k][0] * P2[j][1] - P2[j][0] * P2[k][1]; }
-        const ord = ar > 0 ? [...Array(m).keys()] : [...Array(m).keys()].reverse(), Q = ord.map(i => P2[i]), Q3 = ord.map(i => C[i]);   // counter-clockwise in the plane's axes
-        let cx = 0, cy = 0; for (const q of Q) { cx += q[0]; cy += q[1]; } cx /= m; cy /= m;
-        const E = [];   // each edge: its points (vertex indices, A to B) and their t
-        for (let k = 0; k < m; k++) { const A = Q3[k], B = Q3[(k + 1) % m], pts = along(A, B), ids = pts.map(([p]) => { const q = uv(pl, p); return addV(q[0], q[1], p); }), ts = pts.map(x => x[1]);
-          const [key] = ekey(A, B), inner = (edges.get(key) || []).some(o => o !== fi && gOf[o] === gk);
-          let cls = 'inner';
-          if (!inner) { const d = sub(B, A), L = len(d); let out = unit(cross(d, n)); const mid = mul(add(A, B), 0.5), toC = sub(mid, add(add(mul(pl.e1, cx), mul(pl.e2, cy)), mul(n, dot(mid, n)))); if (dot(out, toC) < 0) out = mul(out, -1);
-            const ns = Math.max(2, Math.ceil(L / 2)); let cov = true; for (let i = 0; i < ns && cov; i++) { const p = add(add(A, mul(d, (i + 0.5) / ns)), sub(mul(out, FLAKE.rim), mul(n, FLAKE.rim))); if (!inOther(p, si)) cov = false; }
-            if (out[2] < -SINO) cov = false;   // a rim on an underside is kept, so no skirt faces down
-            cls = cov ? 'covered' : 'seen'; if (cov) skirts.push({ ids, out, fi, set: new Set(ids), extra: [], ab: [Q[k][0], Q[k][1], Q[(k + 1) % m][0], Q[(k + 1) % m][1]] }); else { for (const i of ids) { verts[i].forb = true; verts[i].rim = true; } segs.push([Q[k][0], Q[k][1], Q[(k + 1) % m][0], Q[(k + 1) % m][1]]); } }
-          E.push({ ids, ts, A: Q[k], B: Q[(k + 1) % m] }); }
-        const onEdge = (u, v) => { let best = null, bd = 1e-6; for (let k = 0; k < m; k++) { const a = E[k].A, b = E[k].B, dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy; if (L2 < 1e-18) continue; const t = ((u - a[0]) * dx + (v - a[1]) * dy) / L2; if (t < -1e-6 || t > 1 + 1e-6) continue; const cr = Math.abs(dx * (v - a[1]) - dy * (u - a[0])) / Math.sqrt(L2); if (cr < bd) { bd = cr; best = [k, Math.max(0, Math.min(1, t))]; } } return best; };
-        const HQ = hull2(Q), hm = HQ.length;   // the face as clipped: its hull (a corner snapped to its neighbour's position can turn a tiny edge round)
-        const inP = (u, v, e) => { for (let k = 0; k < hm; k++) { const a = HQ[k], b = HQ[(k + 1) % hm]; if ((b[0] - a[0]) * (v - a[1]) - (b[1] - a[1]) * (u - a[0]) < e) return false; } return true; };
-        let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity; for (const q of Q) { u0 = Math.min(u0, q[0]); u1 = Math.max(u1, q[0]); v0 = Math.min(v0, q[1]); v1 = Math.max(v1, q[1]); }
-        const g = pl.g, polys = [];
-        for (let i = Math.floor(u0 / g); i * g < u1; i++) for (let j = Math.floor(v0 / g); j * g < v1; j++) {
-          const sq = [[i * g, j * g], [(i + 1) * g, j * g], [(i + 1) * g, (j + 1) * g], [i * g, (j + 1) * g]];
-          if (sq.every(([u, v]) => inP(u, v, 1e-9))) { polys.push(sq.map(([u, v]) => addV(u, v, null))); continue; }
-          let poly = sq; for (let k = 0; k < hm && poly.length; k++) { const a = HQ[k], b = HQ[(k + 1) % hm], side = p => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]), out = [];
-            for (let q = 0; q < poly.length; q++) { const P0 = poly[q], P1 = poly[(q + 1) % poly.length], s0 = side(P0), s1 = side(P1); if (s0 >= 0) out.push(P0); if ((s0 >= 0) !== (s1 >= 0)) { const t = s0 / (s0 - s1); out.push([P0[0] + t * (P1[0] - P0[0]), P0[1] + t * (P1[1] - P0[1])]); } }
-            poly = out; }
-          if (poly.length < 3) continue; let pa = 0; for (let q = 0; q < poly.length; q++) { const r = (q + 1) % poly.length; pa += poly[q][0] * poly[r][1] - poly[r][0] * poly[q][1]; } if (pa < 1e-12) continue;
-          const loop = [], info = poly.map(([u, v]) => { const oe = onEdge(u, v); if (oe) { const e = E[oe[0]]; let best = -1, bd = 1e-5; for (let q = 0; q < e.ts.length; q++) { const dd = Math.abs(e.ts[q] - oe[1]); if (dd < bd) { bd = dd; best = q; } } if (best >= 0) return { id: e.ids[best], k: oe[0], t: e.ts[best] }; return { id: addV(u, v, null), k: oe[0], t: oe[1] }; } return { id: addV(u, v, null), k: -1, t: 0 }; });
-          for (let q = 0; q < info.length; q++) { const a = info[q], b = info[(q + 1) % info.length]; if (!loop.length || loop[loop.length - 1] !== a.id) loop.push(a.id);
-            if (a.k >= 0 && b.k >= 0) { const pa = poly[q], pb = poly[(q + 1) % poly.length];   // a stretch along the face's rim (counter-clockwise, as the rim runs): every rim point between
-              if (onEdge((pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2)) for (let k = a.k, guard = 0; guard <= m; k = (k + 1) % m, guard++) { const e = E[k], t0_ = k === a.k ? a.t : -1, t1_ = k === b.k && (k !== a.k || b.t >= a.t) ? b.t : 2;
-                for (let q2 = 0; q2 < e.ts.length; q2++) if (e.ts[q2] > t0_ + 1e-9 && e.ts[q2] < t1_ - 1e-9 && loop[loop.length - 1] !== e.ids[q2]) loop.push(e.ids[q2]);
-                if (t1_ <= 1) break; } } }
-          if (loop.length > 1 && loop[0] === loop[loop.length - 1]) loop.pop(); if (loop.length >= 3) polys.push(loop); }
-        cells.push([fi, polys]); }
-      // the mask: the places this plane may not cut, and the height everywhere else
-      const bf = G.bf, nf = G.nf, base = V => V.p || (V.p = (() => { const q = add(mul(pl.e1, V.u), mul(pl.e2, V.v)), s = (bf - dot(q, nf)) / dot(n, nf); return add(q, mul(n, s)); })());
-      const holds = (st.holds || []).filter(poly => poly.every(p => Math.abs(dot(p, nf) - bf) < 0.3)).map(poly => poly.map(p => uv(pl, p)));
-      const inPoly = (Pg, u, v) => { let c = false; for (let a = 0, b = Pg.length - 1; a < Pg.length; b = a++) if ((Pg[a][1] > v) !== (Pg[b][1] > v) && u < (Pg[b][0] - Pg[a][0]) * (v - Pg[a][1]) / (Pg[b][1] - Pg[a][1]) + Pg[a][0]) c = !c; return c; };
-      /* another stone whose surface passes through the layer the scars would take (it overlaps this one, and its bottom or side lies within the
-         depth under this face) would be bared: no scar there; a stone that fills the whole layer (one whose face lies on this plane) is cut alike */
-      const layer = Array.from({ length: Math.ceil(hi / 0.15) + 1 }, (_, i) => Math.min(0.05 + 0.15 * i, hi + 0.05)), bares = p => { let k = 0; for (const o of layer) if (inOther(add(p, mul(n, -o)), si)) k++; return k > 0 && k < layer.length; };
-      let free = 0;
-      for (const V of verts) { if ((bares(base(V)) || FLAKE.off.some(o => inOther(add(base(V), mul(n, o)), si) || (n[2] > 0.05 && inOther(add(base(V), [0, 0, o]), si))) || holds.some(Pg => inPoly(Pg, V.u, V.v)))) { V.forb = true; V.held = true; } if (!V.forb) free++; }   // (a rim corner too: what is held there is kept past it)
-      if (!free) continue;
-      const KEEP = FLAKE.keep + pl.g, R = pl.R + KEEP, FB = new Map(),   /* a covered place is known at the mesh's corners only, so it is kept one step past them too */ edge = new Uint8Array(verts.length), bk = (a, b) => (a + 1048576) * 2097152 + b + 1048576;   // only a covered place's edge is measured to: a covered corner on a cell with a free one (a seen rim is measured as a line)
-      for (const [, polys] of cells) for (const L of polys) { let f0 = false, f1 = false; for (const i of L) { if (verts[i].forb) f1 = true; else f0 = true; } if (f0 && f1) for (const i of L) if (verts[i].forb) edge[i] = 1; }
-      for (let i = 0; i < verts.length; i++) { const V = verts[i]; if (!edge[i] || (V.rim && !V.held)) continue; const k = bk(Math.floor(V.u / R), Math.floor(V.v / R)); (FB.get(k) || FB.set(k, []).get(k)).push(V); }
-      const SB = new Map(); for (const sg of segs) { const [ax, ay, bx, by] = sg; for (let a = Math.floor((Math.min(ax, bx) - R) / R); a <= Math.floor((Math.max(ax, bx) + R) / R); a++) for (let b = Math.floor((Math.min(ay, by) - R) / R); b <= Math.floor((Math.max(ay, by) + R) / R); b++) { const k = bk(a, b); (SB.get(k) || SB.set(k, []).get(k)).push(sg); } }
-      const distAt = (u, v) => { let dm = R; const a = Math.floor(u / R), b = Math.floor(v / R);
-        for (let da = -1; da <= 1; da++) for (let db = -1; db <= 1; db++) { const L = FB.get(bk(a + da, b + db)); if (L) for (const F of L) { const d = Math.max(0, Math.hypot(F.u - u, F.v - v) - KEEP); if (d < dm) dm = d; } }
-        for (const [ax, ay, bx, by] of SB.get(bk(a, b)) || []) { if (u < Math.min(ax, bx) - dm || u > Math.max(ax, bx) + dm || v < Math.min(ay, by) - dm || v > Math.max(ay, by) + dm) continue;   // the distance to a seen rim is to its line, not its points
-          const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy, t = L2 > 0 ? Math.max(0, Math.min(1, ((u - ax) * dx + (v - ay) * dy) / L2)) : 0, d = Math.hypot(ax + t * dx - u, ay + t * dy - v); if (d < dm) dm = d; }
-        return dm; };
-      // a point's height and which part of the surface it is on: a scoop (its id), the face as it was (-1), or the mask's slope from a kept place (-2)
-      const hAt = (u, v) => { const Hh = pl.H(u, v), w_ = pl.win, mk_ = -pl.rt * distAt(u, v); return mk_ >= Hh ? [mk_, -2] : [Hh, Hh === 0 ? -1 : w_]; };
-      for (const V of verts) { if (V.forb) { V.h = 0; V.lab = -2; continue; } [V.h, V.lab] = hAt(V.u, V.v); }
-      /* each cell is cut where the surface changes part (a ridge between two scoops, where a scoop meets the mask's slope or the face as it was), so a
-         ridge is an edge of the mesh, not a zigzag across it: the change is found on the cell's edges by halving, and the cell split by the line between */
-      const crossAt = (a0, b0, lab) => { const a = Math.min(a0, b0), b = Math.max(a0, b0), A = verts[a], B = verts[b]; let lo_ = 0, hi_ = 1; const inA = A.lab === lab;   // from the lower index, so the cells either side find the same point
-        for (let it = 0; it < 16; it++) { const t = (lo_ + hi_) / 2, r = hAt(A.u + t * (B.u - A.u), A.v + t * (B.v - A.v)); if ((r[1] === lab) === inA) lo_ = t; else hi_ = t; }
-        const t = (lo_ + hi_) / 2, u = A.u + t * (B.u - A.u), v = A.v + t * (B.v - A.v), n0 = verts.length, id = addV(u, v, null);
-        if (id === n0) { const V = verts[id], r = hAt(u, v); V.h = r[0]; V.lab = r[1]; V.x = true; for (const S of skirts) if (S.set.has(a) && S.set.has(b)) S.extra.push(id); }   // a point on a rim another stone continues joins its skirt
-        return id; };
-      const fan = (L, out) => { if (L.length === 3) { out.push(L); return; } if (L.length === 4) { out.push([L[0], L[1], L[2]], [L[0], L[2], L[3]]); return; }
-        let mu = 0, mv = 0; for (const id of L) { mu += verts[id].u; mv += verts[id].v; } mu /= L.length; mv /= L.length; const c = verts.length, r = hAt(mu, mv); verts.push({ u: mu, v: mv, p: null, forb: false, h: r[0], lab: r[1] });
-        for (let q = 0; q < L.length; q++) out.push([c, L[q], L[(q + 1) % L.length]]); };
-      const split = (L, depth, out) => { const nL = L.length, f0 = L.find(i => !verts[i].x); if (f0 === undefined) { fan(L, out); return; } const lab0 = verts[f0].lab; let fl = [];   // a point found on a change belongs to both sides
-        for (let q = 0; q < nL; q++) { const P = verts[L[q]], Q_ = verts[L[(q + 1) % nL]]; if (!P.x && !Q_.x && (P.lab === lab0) !== (Q_.lab === lab0)) fl.push(q); }
-        if (depth > 6 || fl.length < 2) { fan(L, out); return; }
-        const e1 = fl[0], e2 = fl[1], X1 = crossAt(L[e1], L[(e1 + 1) % nL], lab0), X2 = crossAt(L[e2], L[(e2 + 1) % nL], lab0), A_ = [X1], B_ = [X2];
-        for (let q = e1 + 1; q <= e2; q++) A_.push(L[q]); A_.push(X2); for (let q = e2 + 1; q <= e1 + nL; q++) B_.push(L[q % nL]); B_.push(X1);
-        const clean = P => { const o = []; for (const i of P) if (!o.length || o[o.length - 1] !== i) o.push(i); if (o.length > 1 && o[0] === o[o.length - 1]) o.pop(); return o; };
-        const P1 = clean(A_), P2 = clean(B_); if (P1.length >= 3) split(P1, depth + 1, out); if (P2.length >= 3) split(P2, depth + 1, out); };
-      for (const [fi, polys] of cells) { const ft = []; for (const L of polys) split(L, 0, ft); tris.push([fi, ft]); }
-      for (const S of skirts) if (S.extra.length) { const [ax, ay, bx, by] = S.ab, dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy, tt = i => ((verts[i].u - ax) * dx + (verts[i].v - ay) * dy) / L2; S.ids = [...S.ids, ...S.extra].sort((p, q) => tt(p) - tt(q)); }
-      let any = false; for (const V of verts) { if (V.h < -1e-4) any = true; if (V.h < deepest) deepest = V.h; }
-      const top = V => V.t || (V.t = V.h ? add(base(V), mul(n, V.h)) : base(V));   // a corner's place as cut (kept until it is lifted)
-      /* a thin triangle along a rim can lean more than the heights at its corners do: any that would face down past the target is lifted to its
-         shallowest corner (never cut deeper), again until none is left; at worst the face comes back flat, which faces down less than the target */
-      for (let pass = 0, again = any; again && pass < 60; pass++) { again = false;
-        for (const [, ft] of tris) for (const [a, b, c] of ft) { const A = verts[a], B = verts[b], C = verts[c]; if (!A.h && !B.h && !C.h) continue;
-          const q = cross(sub(top(B), top(A)), sub(top(C), top(A))), L = len(q); if (L < 1e-12) continue; const nz = (dot(q, n) < 0 ? -q[2] : q[2]) / L;
-          if (nz < -FLAKE.sinKeep) { const h = Math.max(A.h, B.h, C.h); A.h = B.h = C.h = h; A.t = B.t = C.t = null; again = true; } } }
-      if (!verts.some(V => V.h < -1e-4)) continue;
-      for (const [fi, ft] of tris) { const out = repl[fi] = [];
-        for (const [a, b, c] of ft) { const T = tri3(top(verts[a]), top(verts[b]), top(verts[c]), n); if (T) { out.push(T); if (T.n[2] < -SINO - 1e-9) nSteep++; } } nFaces++; }
-      for (const S of skirts) { const out = repl[S.fi]; for (let q = 0; q + 1 < S.ids.length; q++) { const A = verts[S.ids[q]], B = verts[S.ids[q + 1]]; if (!A.h && !B.h) continue;
-        for (const T of [tri3(base(A), base(B), top(B), S.out), tri3(base(A), top(B), top(A), S.out)]) if (T) { T.skirt = true; out.push(T); } } }
+    // the surfaces: one for each plane of the body (its faces on it gathered), one for each face of each crack's cutter
+    const S = [], byKey = new Map();
+    for (const f of bodyOf(st)) { if (f.v.length < 3) continue; const kn = f.n.map(x => Math.round(x * FLAKE.QN)), kb = Math.round(dot(f.n, f.v[0]) * FLAKE.QB), k = kn.join(',') + ',' + kb;
+      let L = byKey.get(k); if (!L) { const pl = plane(kn, kb), n = f.n; L = { n, b: dot(n, f.v[0]), pl, kind: f.kind, polys: [], body: true, same: onPlane.get(k) };
+        if (pl) { L.e1 = pl.e1; L.e2 = pl.e2; } else { L.e1 = unit(Math.abs(n[0]) < 0.9 ? [0, -n[2], n[1]] : [n[2], 0, -n[0]]); L.e2 = cross(n, L.e1); }
+        byKey.set(k, L); S.push(L); }
+      L.polys.push(f.v); }
+    const NB = S.length, cuts = st.cut || [];
+    cuts.forEach((c, ci) => { for (const fc of c.facets) { if (fc.verts.length < 3) continue; const n = fc.n, e1 = unit(Math.abs(n[0]) < 0.9 ? [0, -n[2], n[1]] : [n[2], 0, -n[0]]);
+      // its own plane among the cutter's (the facet faces out of the stone, into the cutter)
+      const b = dot(n, fc.verts[0]); let own = -1; c.planes.forEach((p, pi) => { if (dot(p.n, n) < -1 + 1e-6 && Math.abs(p.b + b) < 1e-6) own = pi; });
+      S.push({ n, b, pl: null, kind: KIND.CRACK, polys: [fc.verts], body: false, cut: ci, own, e1, e2: cross(n, e1) }); } });
+    /* a face is flat where another stone lies just off it (covers it or rests on it), or where what a scoop here would take away holds a stone up:
+       looked for at each point of its lattice, and along each lattice edge between a covered point and a free one, where it changes (by halving) */
+    // the part [t0, t1] of the segment a + t d (t in [0, 1]) inside stone j, or null
+    const clipIn = (j, a, d) => { const B = bodies[j].pl; let t0 = 0, t1 = 1; for (let q = 0; q < B.length; q += 4) { const na = B[q] * a[0] + B[q + 1] * a[1] + B[q + 2] * a[2] - B[q + 3] + 1e-6, nd = B[q] * d[0] + B[q + 1] * d[1] + B[q + 2] * d[2];
+      if (Math.abs(nd) < 1e-12) { if (na > 0) return null; continue; } const t = -na / nd; if (nd > 0) { if (t < t1) t1 = t; } else if (t > t0) t0 = t; if (t0 >= t1) return null; } return [t0, t1]; };
+    // covered: inside another stone even as far in front as a scoop of that stone can reach (a neighbour a hair in front, scooped, bares this face)
+    const coverAt = (L, p) => { const C = L.near, n = L.n, o = FLAKE.off, oc = hi + o, q = [p[0] + n[0] * oc, p[1] + n[1] * oc, p[2] + n[2] * oc]; for (const j of C) if (inBody(j, q)) return 1;
+      // down the column a scoop here could take: a stone that reaches a point of it lifted by a lattice step, but not the point itself, rests on it
+      const a = [p[0] - n[0] * o / 2, p[1] - n[1] * o / 2, p[2] - n[2] * o / 2], d = [-n[0] * hi, -n[1] * hi, -n[2] * hi], au = [a[0], a[1], a[2] + lift];
+      for (const j of C) { if (L.same && L.same.has(j)) continue; const B = bodies[j]; if (Math.min(a[0], a[0] + d[0]) > B.h[0] || Math.max(a[0], a[0] + d[0]) < B.l[0] || Math.min(a[1], a[1] + d[1]) > B.h[1] || Math.max(a[1], a[1] + d[1]) < B.l[1] || Math.min(a[2], a[2] + d[2]) > B.h[2] || Math.max(a[2], a[2] + d[2]) + lift < B.l[2]) continue;
+        const up = clipIn(j, au, d); if (!up) continue; const at = clipIn(j, a, d); if (!at || up[0] < at[0] - 1e-9 || up[1] > at[1] + 1e-9) return 1; }
+      return 0; };
+    const covAt = (L, i, j) => { if (!L.near.length) return 0; const k = bk(i, j); let c = L.cov.get(k); if (c === undefined) { c = coverAt(L, L.at(i * g, j * g)); L.cov.set(k, c); } return c; };
+    const edgeX = (L, i, j, ax) => { const k = bk(i, j) * 2 + ax; let t = L.ex.get(k); if (t !== undefined) return t; const i2 = ax ? i : i + 1, j2 = ax ? j + 1 : j, c0 = covAt(L, i, j);
+      let tl = 0, th = 1; for (let it = 0; it < 10; it++) { const m = (tl + th) / 2; if (coverAt(L, L.at((i + m * (i2 - i)) * g, (j + m * (j2 - j)) * g)) === c0) tl = m; else th = m; }
+      t = (tl + th) / 2; L.ex.set(k, t); return t; };
+    // a lattice cell's covered part (a polygon, by marching squares, when the cover's edge runs through it) and that edge, as segments
+    const NONE = { n: 0 }, cellC = (L, ci, cj) => { if (!L.near.length) return NONE; const k = bk(ci, cj); let C = L.cells.get(k); if (C) return C;
+      const cs = [[ci, cj], [ci + 1, cj], [ci + 1, cj + 1], [ci, cj + 1]], cv = cs.map(([i, j]) => covAt(L, i, j)), nc = cv[0] + cv[1] + cv[2] + cv[3];
+      if (nc === 0 || nc === 4) { C = { n: nc }; L.cells.set(k, C); return C; }
+      const X = q => { const [i, j] = cs[q], ax = q % 2, fwd = q < 2, t = fwd ? edgeX(L, i, j, ax) : 1 - edgeX(L, cs[(q + 1) % 4][0], cs[(q + 1) % 4][1], ax), [i2, j2] = cs[(q + 1) % 4]; return [(i + t * (i2 - i)) * g, (j + t * (j2 - j)) * g, 1]; };
+      const poly = []; for (let q = 0; q < 4; q++) { if (cv[q]) poly.push([cs[q][0] * g, cs[q][1] * g, 0]); if (cv[q] !== cv[(q + 1) % 4]) poly.push(X(q)); }
+      const smp = []; for (let q = 0; q < poly.length; q++) { const A = poly[q], B = poly[(q + 1) % poly.length]; if (A[2] && B[2]) smp.push(A[0], A[1], B[0], B[1], -3 - (k * 8 + q)); }   // each with its own label
+      C = { n: nc, poly, smp }; L.cells.set(k, C); return C; };
+    const inCover = (L, u, v) => { const fu = u / g, fv = v / g, ru = Math.round(fu), rv = Math.round(fv), onU = Math.abs(fu - ru) < 1e-7, onV = Math.abs(fv - rv) < 1e-7;
+      if (onU || onV) { if (onU && onV) return covAt(L, ru, rv) === 1; const i = onU ? ru : Math.floor(fu), j = onV ? rv : Math.floor(fv), c0 = covAt(L, i, j), c1 = onU ? covAt(L, i, j + 1) : covAt(L, i + 1, j);   // on a lattice line: by its own edge
+        if (c0 === c1) return c0 === 1; return ((onU ? fv - j : fu - i) < edgeX(L, i, j, onU ? 1 : 0) ? c0 : c1) === 1; }
+      const C = cellC(L, Math.floor(fu), Math.floor(fv)); if (C.n !== 1 && C.n !== 2 && C.n !== 3) return C.n === 4; const P = C.poly; let c = false;
+      for (let a = 0, b = P.length - 1; a < P.length; b = a++) if ((P[a][1] > v) !== (P[b][1] > v) && u < (P[b][0] - P[a][0]) * (v - P[a][1]) / (P[b][1] - P[a][1]) + P[a][0]) c = !c; return c; };
+    for (const L of S) {
+      // the point of the surface's plane at (u, v) in its axes (a field's axes belong to its plane's key: carried along that normal onto the face's own plane)
+      const pn = L.pl ? L.pl.n : L.n, dn = dot(pn, L.n); L.at = (u, v) => { const q = add(mul(L.e1, u), mul(L.e2, v)); return add(q, mul(pn, (L.b - dot(q, L.n)) / dn)); };   // (made again, affine, once the fields are known)
+      // all covered, every corner and the middle: no field
+      if (L.pl && L.body) { let any = false; for (const P of L.polys) { let c = [0, 0, 0]; for (const p of P) c = add(c, p); c = mul(c, 1 / P.length); for (const p of [c, ...P.map(p => add(mul(p, 0.9), mul(c, 0.1)))]) if (!inOther(add(p, mul(L.n, FLAKE.off)), si)) { any = true; break; } if (any) break; } if (!any) L.pl = null; }
     }
-    // every face not flaked takes the points its flaked neighbours put on their shared edges, so the shell has no seam
-    const nf = []; faces.forEach((f, fi) => { if (repl[fi]) { for (const T of repl[fi]) nf.push(T); return; } const m = f.v.length, v = []; for (let k = 0; k < m; k++) { const pts = along(cv(f.v[k]), cv(f.v[(k + 1) % m])); for (let q = 0; q + 1 < pts.length; q++) v.push(pts[q][0]); } nf.push({ ...f, v }); });
-    st.flaked = repl.filter(Boolean).length;
-    Object.defineProperty(st, 'faces', { value: nf, writable: true, configurable: true, enumerable: true });
+    /* a surface's depth at (u, v), and which part of it the point is on (a scoop's id; -1: the plane; below -2: the slope up to a stretch of a covered place's edge): its field,
+       nothing where covered, and near a covered place no deeper than a slope up to its edge as steep as can be (the cliff, on a top) without facing
+       down past 63 degrees (gentler where the slope would face down) */
+    /* the slopes allowed, a convex set of gradients (rising toward the covered place): none steeper than the cliff (T), and none climbing straight up
+       the face faster than the most that faces down no further than 63 degrees (s; the gradients that face down past it are a convex set, nearest
+       along that line). The deepest a point may lie under the face at offset v from a place on the cover's edge is the support of that set in v (the
+       most any of its gradients climbs along v), so every slope the surface takes is one of them: T |v| where that gradient is allowed, else the
+       chord's end, s v.u + sqrt(T² - s²) |v.u'| (u the face's way up, u' across it) */
+    // the stones that could cover a face or rest on what its scoops take: those whose box comes within reach of the face's
+    const reach = 3 * hi + lift + 2 * g + 0.2, nearSt = []; { const B = bodies[si]; const L_ = bucketsNear(B.l, B.h, reach); for (const j of L_) if (j !== si) nearSt.push(j); }
+    for (const L of S) if (L.pl) { const l = [1e9, 1e9, 1e9], h = [-1e9, -1e9, -1e9]; for (const P of L.polys) for (const v of P) for (let a = 0; a < 3; a++) { if (v[a] < l[a]) l[a] = v[a]; if (v[a] > h[a]) h[a] = v[a]; }
+      L.near = nearSt.filter(j => { const B = bodies[j]; for (let a = 0; a < 3; a++) if (B.h[a] < l[a] - reach || B.l[a] > h[a] + reach) return false; return true; }); }
+    for (const L of S) if (L.pl) { L.cov = new Map(); L.ex = new Map(); L.cells = new Map(); L.nearE = new Map(); const c = Math.sin(63 * DEG), T = Math.tan(FLAKE.cliff * DEG);
+      const zp = [-L.n[2] * L.n[0], -L.n[2] * L.n[1], 1 - L.n[2] * L.n[2]], zl = len(zp); let s = T;
+      if (zl > 1e-6) { s = 0; for (let al = FLAKE.cliff; al >= 0; al -= 0.25) if (L.n[2] * Math.cos(al * DEG) - zl * Math.sin(al * DEG) >= -c) { s = Math.tan(al * DEG); break; } }
+      L.T = T; L.s = s; L.k = Math.sqrt(Math.max(0, T * T - s * s)); L.ux = zl > 1e-6 ? dot(zp, L.e1) / zl : 1; L.uy = zl > 1e-6 ? dot(zp, L.e2) / zl : 0;
+      L.CR = Math.ceil(hi * L.pl.sq / Math.max(0.05, Math.min(s, T)) / g) + 1; }   // as far as the deepest scoop on this face can be from a covered place
+    const sig = (L, x, y) => { const r = Math.hypot(x, y), a = x * L.ux + y * L.uy; return L.T * a <= L.s * r ? L.T * r : L.s * a + L.k * Math.abs(x * L.uy - y * L.ux); };
+    const nearE = (L, ci, cj) => { const k = bk(ci, cj); let E = L.nearE.get(k); if (E) return E; E = []; const R = L.CR;
+      for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) { const C = cellC(L, ci + a, cj + b); if (C.smp) for (const x of C.smp) E.push(x); } L.nearE.set(k, E); return E; };
+    // the least support along a segment a + t e, t in [0, 1] (it is convex in t): at its ends, the nearest point, where it turns from one form to the other, and where v.u' is 0
+    const segMin = (L, ax, ay, ex, ey) => { let m = Math.min(sig(L, ax, ay), sig(L, ax + ex, ay + ey)); const l2 = ex * ex + ey * ey; if (l2 < 1e-18) return m;
+      const ts = [-(ax * ex + ay * ey) / l2], cu = ex * L.uy - ey * L.ux; if (Math.abs(cu) > 1e-12) ts.push(-(ax * L.uy - ay * L.ux) / cu);
+      const A0 = ax * L.ux + ay * L.uy, A1 = ex * L.ux + ey * L.uy, q = L.s / L.T, qa = A1 * A1 - q * q * l2, qb = 2 * (A0 * A1 - q * q * (ax * ex + ay * ey)), qc = A0 * A0 - q * q * (ax * ax + ay * ay);
+      if (Math.abs(qa) > 1e-12) { const D = qb * qb - 4 * qa * qc; if (D >= 0) { const sd = Math.sqrt(D); ts.push((-qb - sd) / (2 * qa), (-qb + sd) / (2 * qa)); } } else if (Math.abs(qb) > 1e-12) ts.push(-qc / qb);
+      for (const t of ts) if (t > 0 && t < 1) m = Math.min(m, sig(L, ax + t * ex, ay + t * ey)); return m; };
+    let DL = -1;   // the label of the last depth asked for
+    const depth = (L, u, v) => { DL = -1; if (!L.pl) return 0; const h = L.pl.H(u, v); let win = L.pl.win; if (h === 0 || inCover(L, u, v)) return 0; let d = -h;
+      const E = nearE(L, Math.floor(u / g), Math.floor(v / g)), tmn = Math.min(L.s, L.T);
+      for (let q = 0; q < E.length; q += 5) { const ax = E[q] - u, ay = E[q + 1] - v, ex = E[q + 2] - E[q], ey = E[q + 3] - E[q + 1], l2 = ex * ex + ey * ey;
+        const tt = l2 > 0 ? Math.max(0, Math.min(1, -(ax * ex + ay * ey) / l2)) : 0; if (Math.hypot(ax + tt * ex, ay + tt * ey) * tmn >= d) continue;   // no nearer than this, at the least slope
+        const t = segMin(L, ax, ay, ex, ey); if (t < d) { d = t; win = E[q + 4]; } }
+      DL = win; return d; };
+    /* how far the point (u, v) of surface ls, d under its plane, is outside the stone, leaving out surface ls (<= 0: inside or on it); stops at the
+       first that puts it outside. Each other plane's offset and axes are affine in (u, v, d): rows of [c0, cu, cv, cd] for the offset, then u, then v */
+    for (const L of S) { const pn = L.pl ? L.pl.n : L.n, dn = dot(pn, L.n), A0 = mul(pn, L.b / dn), Au = sub(L.e1, mul(pn, dot(L.e1, L.n) / dn)), Av = sub(L.e2, mul(pn, dot(L.e2, L.n) / dn));
+      L.A0 = A0; L.Au = Au; L.Av = Av; L.at = (u, v) => [A0[0] + u * Au[0] + v * Av[0], A0[1] + u * Au[1] + v * Av[1], A0[2] + u * Au[2] + v * Av[2]]; }
+    for (const L of S) { L.rows = new Float64Array(12 * NB); for (let j = 0; j < NB; j++) { const o = S[j], r = 12 * j;
+      for (const [k, w, c] of [[0, o.n, -o.b], [4, o.e1, 0], [8, o.e2, 0]]) { L.rows[r + k] = dot(w, L.A0) + c; L.rows[r + k + 1] = dot(w, L.Au); L.rows[r + k + 2] = dot(w, L.Av); L.rows[r + k + 3] = -dot(w, L.n); } } }
+    const outBy = (ls, u, v, d) => { let m = -Infinity; const self = S[ls], R = self.rows;
+      for (let j = 0; j < NB; j++) { if (j === ls) continue; const r = 12 * j, s = R[r] + R[r + 1] * u + R[r + 2] * v + R[r + 3] * d; if (s < -hi - 1e-9) continue; let w = s;
+        const L = S[j]; if (L.pl && s > -hi) w += depth(L, R[r + 4] + R[r + 5] * u + R[r + 6] * v + R[r + 7] * d, R[r + 8] + R[r + 9] * u + R[r + 10] * v + R[r + 11] * d); if (w > m) { m = w; if (m > 1e-9) return m; } }
+      if (!cuts.length) return m;
+      const q = [self.A0[0] + u * self.Au[0] + v * self.Av[0] - d * self.n[0], self.A0[1] + u * self.Au[1] + v * self.Av[1] - d * self.n[1], self.A0[2] + u * self.Au[2] + v * self.Av[2] - d * self.n[2]];
+      for (let ci = 0; ci < cuts.length; ci++) { const c = cuts[ci]; if (q[0] < c.lo[0] - 1e-6 || q[0] > c.hi[0] + 1e-6 || q[1] < c.lo[1] - 1e-6 || q[1] > c.hi[1] + 1e-6 || q[2] < c.lo[2] - 1e-6 || q[2] > c.hi[2] + 1e-6) { if (!self.body && self.cut === ci) return 1; continue; }
+        if (!self.body && self.cut === ci) { for (let pi = 0; pi < c.planes.length; pi++) { if (pi === self.own) continue; const p = c.planes[pi], w = dot(p.n, q) - p.b; if (w > m) { m = w; if (m > 1e-9) return m; } } }
+        else { let C = -Infinity; for (const p of c.planes) { const w = dot(p.n, q) - p.b; if (w > C) C = w; } if (-C > m) { m = -C; if (m > 1e-9) return m; } } }
+      return m; };
+    const out = [];
+    for (let ls = 0; ls < S.length; ls++) {
+      // the outline: the face's, with those of faces of the stone nearly in its plane (a deeper field on a plane a few degrees off takes over far past its own edge)
+      const L = S[ls], near_ = L.body ? S.filter((o, j) => j < NB && (j === ls || dot(o.n, L.n) > Math.cos(15 * DEG))) : [L], H2 = hull2(near_.flatMap(o => o.polys.flat()).map(p => [dot(p, L.e1), dot(p, L.e2)])), hm = H2.length; if (hm < 3) continue;
+      // the lattice over the face's outline, widened by how far a neighbour's scoops can move the edge out
+      let cot = 0; if (L.body) for (let j = 0; j < NB; j++) { const c = dot(S[j].n, L.n); if (j !== ls && c > 0 && c < 0.999) cot = Math.max(cot, c / Math.sqrt(1 - c * c)); }   // a neighbour leaning toward this face moves its edge out by its depth times this
+      const M = L.body ? Math.min(2.5, cot) * hi + g : 1e-6, inH = (u, v) => { for (let k = 0; k < hm; k++) { const a = H2[k], b = H2[(k + 1) % hm], dx = b[0] - a[0], dy = b[1] - a[1]; if (dx * (v - a[1]) - dy * (u - a[0]) < -M * Math.hypot(dx, dy)) return false; } return true; };
+      let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity; for (const q of H2) { u0 = Math.min(u0, q[0]); u1 = Math.max(u1, q[0]); v0 = Math.min(v0, q[1]); v1 = Math.max(v1, q[1]); }
+      const i0 = Math.floor((u0 - M) / g) - 1, i1 = Math.ceil((u1 + M) / g) + 1, j0 = Math.floor((v0 - M) / g) - 1, j1 = Math.ceil((v1 + M) / g) + 1;
+      // the surface's points: [u, v, X (its place), label, out]
+      const VP = [], vAt = new Map(), mk = (u, v) => { const d = depth(L, u, v), lab = DL, X = L.at(u, v); X[0] -= L.n[0] * d; X[1] -= L.n[1] * d; X[2] -= L.n[2] * d; if (d > deepest) deepest = d; VP.push([u, v, X, lab, outBy(ls, u, v, d)]); return VP.length - 1; };
+      const gp = (i, j) => { const k = bk(i, j); let id = vAt.get(k); if (id === undefined) { id = mk(i * g, j * g); vAt.set(k, id); } return id; };
+      // where along a to b the stone's outline is crossed (a inside), and where the label changes (a's label kept): each pair once
+      const xAt = new Map(), cross1 = (a, b, kind) => { const k = (a < b ? a * 4194304 + b : b * 4194304 + a) * 2 + kind; let id = xAt.get(k); if (id !== undefined) return id;
+        const A = VP[a], B = VP[b], inA = kind ? A[3] : A[4] <= 0; let tl = 0, th = 1, t;
+        if (kind) { for (let it = 0; it < FLAKE.bisect; it++) { const m = (tl + th) / 2; depth(L, A[0] + m * (B[0] - A[0]), A[1] + m * (B[1] - A[1])); if (DL === inA) tl = m; else th = m; } t = (tl + th) / 2; }
+        else { for (let it = 0; it < FLAKE.bisect; it++) { const m = (tl + th) / 2, u = A[0] + m * (B[0] - A[0]), v = A[1] + m * (B[1] - A[1]); if (outBy(ls, u, v, depth(L, u, v)) <= 0) tl = m; else th = m; } t = tl; }   // ending on the inside
+        id = mk(A[0] + t * (B[0] - A[0]), A[1] + t * (B[1] - A[1])); if (!kind) VP[id][4] = 0; else VP[id].x = 1; xAt.set(k, id); return id; };
+      const tris = [];
+      const fan = P => { for (let q = 1; q + 1 < P.length; q++) tris.push(P[0], P[q], P[q + 1]); };
+      // a piece cut along its label changes: the first point not on a change names the side; a point found on a change reads the label just inside the edge
+      const labAt = (A, B, t) => (depth(L, A[0] + t * (B[0] - A[0]), A[1] + t * (B[1] - A[1])), DL);
+      const nearLab = new Map(), labNear = (a, b, t) => { const k = (a * 4194304 + b) * 4 + (t < 0.01 ? 1 : 0) + (t > 0.5 ? 2 : 0); let l = nearLab.get(k); if (l === undefined) { l = labAt(VP[a], VP[b], t); nearLab.set(k, l); } return l; };   // the label just inside an edge from a point on a change, once each
+      const crossL = (a, b, lab0) => { const A = VP[a], B = VP[b], ta = A.x ? 0.02 : 0, tb = B.x ? 0.98 : 1, inA = (A.x ? labAt(A, B, ta) : A[3]) === lab0; let tl = ta, th = tb;
+        for (let it = 0; it < FLAKE.bisect; it++) { const t = (tl + th) / 2; if ((labAt(A, B, t) === lab0) === inA) tl = t; else th = t; }
+        const id = mk(A[0] + (tl + th) / 2 * (B[0] - A[0]), A[1] + (tl + th) / 2 * (B[1] - A[1])); VP[id].x = 1; return id; };
+      // a cut runs between two places on the piece's outline where the label changes: on an edge (a point found there) or at a point already on a change
+      const split = (P, depth_) => { if (depth_ > 12) { fan(P); return; } const f0 = P.find(i => !VP[i].x), n = P.length, cuts = [], lab0 = f0 !== undefined ? VP[f0][3] : labAt(VP[P[0]], VP[P[1]], 0.5);   // (all on changes: the label halfway along its first edge)
+        for (let q = 0; q < n; q++) { const a = P[q], b = P[(q + 1) % n], A = VP[a], B = VP[b];
+          if (A.x) { const lp = labNear(a, P[(q + n - 1) % n], 0.02), ln = labNear(a, b, 0.02); if ((lp === lab0) !== (ln === lab0)) cuts.push([q, 1]); }
+          const la = A.x ? labNear(a, b, 0.02) : A[3], lb = B.x ? labNear(b, a, 0.02) : B[3]; if ((la === lab0) !== (lb === lab0)) cuts.push([q, 0]); }
+        if (cuts.length === 1) for (let q = 0; q < n && cuts.length < 2; q++) { const A = VP[P[q]]; if (!A.x || (cuts[0][1] && cuts[0][0] === q)) continue;   // a change that ends at a corner of the piece: looked for closer in
+          const lp = labNear(P[q], P[(q + n - 1) % n], 0.002), ln = labNear(P[q], P[(q + 1) % n], 0.002); if ((lp === lab0) !== (ln === lab0)) cuts.push([q, 1]); }
+        cuts.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+        if (cuts.length < 2) { fan(P); return; }
+        const pt = ([q, at]) => { if (at) return P[q]; const a = P[q], b = P[(q + 1) % n]; return !VP[a].x && !VP[b].x ? (VP[a][3] === lab0 ? cross1(a, b, 1) : cross1(b, a, 1)) : crossL(a, b, lab0); };
+        const [c1, c2] = cuts, X1 = pt(c1), X2 = pt(c2), A_ = [X1], B_ = [X2];
+        for (let q = c1[0] + 1; q <= c2[0] - c2[1]; q++) A_.push(P[q]); A_.push(X2);
+        for (let q = c2[0] + 1; q <= c1[0] - c1[1] + n; q++) B_.push(P[q % n]); B_.push(X1);
+        const clean = Q => { const o = []; for (const i of Q) if (!o.length || o[o.length - 1] !== i) o.push(i); if (o.length > 1 && o[0] === o[o.length - 1]) o.pop(); return o; };
+        const Q1 = clean(A_), Q2 = clean(B_); if (Q1.length >= 3 && Q2.length >= 3) { split(Q1, depth_ + 1); split(Q2, depth_ + 1); } else fan(P); };
+      const cell = (i, j) => { if (!inH(i * g, j * g) && !inH((i + 1) * g, j * g) && !inH((i + 1) * g, (j + 1) * g) && !inH(i * g, (j + 1) * g)) return;
+        const sq = [gp(i, j), gp(i + 1, j), gp(i + 1, j + 1), gp(i, j + 1)], ins = sq.map(id => VP[id][4] <= 0);
+        if (!ins.some(x => x)) return;
+        let P = sq; if (!ins.every(x => x)) { P = []; for (let q = 0; q < 4; q++) { const a = sq[q], b = sq[(q + 1) % 4]; if (ins[q]) P.push(a); if (ins[q] !== ins[(q + 1) % 4]) P.push(ins[q] ? cross1(a, b, 0) : cross1(b, a, 0)); } }
+        if (P.length >= 3) split(P, 0); };
+      /* the lattice in blocks, halved until a block is wholly flat (no field, or covered at every point of it), further than the deepest scoop inside
+         every other plane that has a field, and clear of the cutters: then it is that square cut by the flat planes it crosses (which do not move), as
+         one polygon (its edges' points lie on the plane too, so the smaller blocks and cells beside it meet it); else down to a single cell */
+      const flatBlock = (I, J, B) => { if (!L.body) return null; const cs = [[I, J], [I + B, J], [I + B, J + B], [I, J + B]].map(([i, j]) => L.at(i * g, j * g)), clip = [];
+        for (let j = 0; j < NB; j++) { if (j === ls) continue; const Lj = S[j]; let mx = -Infinity; for (const p of cs) mx = Math.max(mx, dot(Lj.n, p) - Lj.b); if (Lj.pl ? mx > -hi - 1e-6 : false) return null; if (!Lj.pl && mx > -1e-9) clip.push(Lj); }
+        for (const c of cuts) { let out_ = false; for (let a = 0; a < 3 && !out_; a++) { const lo_ = Math.min(...cs.map(p => p[a])), hi_ = Math.max(...cs.map(p => p[a])); if (hi_ < c.lo[a] - 1e-6 || lo_ > c.hi[a] + 1e-6) out_ = true; } if (!out_) return null; }
+        if (L.pl) for (let i = I; i <= I + B; i++) for (let j = J; j <= J + B; j++) if (!covAt(L, i, j)) return null;
+        let P = cs; for (const Lj of clip) { const o = []; for (let q = 0; q < P.length; q++) { const A = P[q], C = P[(q + 1) % P.length], sa = dot(Lj.n, A) - Lj.b, sc = dot(Lj.n, C) - Lj.b; if (sa <= 0) o.push(A); if ((sa <= 0) !== (sc <= 0)) o.push(add(A, mul(sub(C, A), sa / (sa - sc)))); } P = o; if (P.length < 3) return []; }
+        return P; };
+      // a block wholly outside another plane, by more than this face's deepest scoop can bring it back, is left out (the planes are flat: its corners say)
+      const thr = L.body ? S.map(o => hi * Math.max(0, dot(o.n, L.n)) + 1e-6) : null;
+      const outside = (I, J, B) => { if (!L.body) return false; const R = L.rows, u0 = I * g, v0 = J * g, w = B * g;
+        for (let j = 0; j < NB; j++) { if (j === ls) continue; const r = 12 * j, s0 = R[r] + R[r + 1] * u0 + R[r + 2] * v0 - thr[j], su = R[r + 1] * w, sv = R[r + 2] * w; if (s0 > 0 && s0 + su > 0 && s0 + sv > 0 && s0 + su + sv > 0) return true; } return false; };
+      const block = (I, J, B) => { if (outside(I, J, B)) return; if (B === 1) { cell(I, J); return; }
+        if (!inH(I * g, J * g) && !inH((I + B) * g, J * g) && !inH((I + B) * g, (J + B) * g) && !inH(I * g, (J + B) * g) && !inH((I + B / 2) * g, (J + B / 2) * g) && B * g < M) return;
+        const F = flatBlock(I, J, B); if (F) { if (F.length >= 3) { const ids = F.map(p => { VP.push([dot(p, L.e1), dot(p, L.e2), p, -1, -1]); return VP.length - 1; }); fan(ids); } return; }
+        const h = B / 2; block(I, J, h); block(I + h, J, h); block(I, J + h, h); block(I + h, J + h, h); };
+      const CF = 8; for (let I = Math.floor(i0 / CF) * CF; I < i1; I += CF) for (let J = Math.floor(j0 / CF) * CF; J < j1; J += CF) block(I, J, CF);
+      // its triangles; a scar's kind is SCAR (a bevel's stays BEVEL), a cutter's is a crack's wall
+      const kind = !L.body ? KIND.CRACK : L.pl && L.kind !== KIND.BEVEL ? KIND.SCAR : L.kind; let any = false;
+      for (let t = 0; t < tris.length; t += 3) { const T = tri3(VP[tris[t]][2], VP[tris[t + 1]][2], VP[tris[t + 2]][2], L.n, kind); if (!T) continue; if (!L.body) T.crack = true; out.push(T); if (T.n[2] < -SINO - 1e-9 && L.n[2] >= -SINO) nSteep++; if (!any && L.pl && (VP[tris[t]][3] !== -1)) any = true; }
+      if (any) nFaces++;
+    }
+    st.flaked = out.length;
+    Object.defineProperty(st, 'faces', { value: out, writable: true, configurable: true, enumerable: true });
   });
   let tri = 0; for (const s of stones) for (const f of s.faces) tri += f.v.length - 2;
-  return { faces: nFaces, steep: nSteep, deepest: -deepest, tri, ms: now() - t0 };
+  return { faces: nFaces, steep: nSteep, deepest, tri, ms: now() - t0 };
 }
 function build(seed, P, opt = {}) {
   const w = wall(seed, P, opt); w.unbev = Float32Array.from(UNB || []); w.report = { D: Float32Array.from(ERD), K: Int32Array.from(ERK), O: Int32Array.from(ERO), W: Int32Array.from(ERW), AD: Float32Array.from(ATD), AK: Int32Array.from(ATK), AW: ATW };
@@ -2502,7 +2570,7 @@ function surfaceOf(w) {
       let gx = 0, gy = 0, gz = 0; for (let i = 1; i + 1 < v.length; i++) { const q = cross(sub(v[i], v[0]), sub(v[i + 1], v[0])); gx += q[0]; gy += q[1]; gz += q[2]; }
       const flip = gx * f.n[0] + gy * f.n[1] + gz * f.n[2] < 0;   // each face is wound counter-clockwise seen from outside
       for (let i = 1; i + 1 < v.length; i++, t++) for (let k = 0; k < 3; k++) { const p = k === 0 ? v[0] : v[flip ? i + 2 - k : i + k - 1], o = 9 * t + 3 * k; pos[o] = p[0]; pos[o + 1] = p[1]; pos[o + 2] = p[2]; col[o] = c[0]; col[o + 1] = c[1]; col[o + 2] = c[2]; }
-      if (f.n[1] < 0.9 && !s.joiner && f.kind !== KIND.SCAR) for (let i = 0; i < v.length; i++) {   // (a joiner's faces lie on its pieces' faces or inside them: no outline)
+      if (f.n[1] < 0.9 && !s.joiner && !f.mesh) for (let i = 0; i < v.length; i++) {   // (a joiner's faces lie on its pieces' faces or inside them: no outline)
         const a = v[i], b = v[(i + 1) % v.length];
         if (seen) { const ka = EK(a), kb = EK(b), l = seen.get(ka < kb ? ka + '|' + kb : kb + '|' + ka); if (l.length > 1 && l.filter(n => dot(n, f.n) > 1 - 1e-9).length > 1) continue; }
         lines.push(a[0], a[1], a[2], b[0], b[1], b[2]);
@@ -2864,7 +2932,7 @@ const GROUPS = [
     { ...P_('branching', 'Branching', 0, 100, 1, '%', 'The chance a crack, where it could carry on along two lines, takes both.'), shownWhile: 'cracks' },
     { ...R_('opening', 'Opening', 0.1, OPENING_MOST, 0.05, MM, `How wide each crack opens at the surface, drawn for each crack; every crack is the same V (each wall ${GROOVE.toFixed(1)}° off the face), so it is about ${(1 / (2 * Math.tan(GROOVE * DEG))).toFixed(1)} times as deep, and printable whichever way it runs. Its free ends taper to nothing. Below the nozzle’s width (0.4 mm) it prints as a mark, not a gap. A gap within one stone (Joint is the gap between two).`), shownWhile: 'cracks' },
     { ...P_('wiggle', 'Wiggle', 0, 100, 1, '%', `How far a crack meanders off its line: 0% straight, 100% the most (its heading up to ${WIGGLE_TURN}° off the line). It walks in steps ${WIGGLE_STEP[0]} to ${WIGGLE_STEP[1]} mm long, each turning its heading by up to this share of ${WIGGLE_TURN}°, kept within the share, before the walk is pulled back so the crack ends where its line ends.`), shownWhile: 'cracks' },
-    R_('flake', 'Flaking', 0, 1, 0.05, MM, 'Shallow hollow scars over every seen face, like the flake scars of knapped flint: this is the deepest a scar goes (each scar drawn from the range). Where scars meet a sharp ridge stands. Made last, after the cracks: the scars belong to a plane, not a stone, so where stones share a face (the back and ends of a wall) they run across the joints. A face keeps its seen edges, the crack lips, and where a stone rests on it or covers it; no scar is steeper than 25° or turns a face down past the overhang target. Faceting is per stone and convex; Flaking is per plane and concave. 0 mm: none.')] },
+    R_('flake', 'Flaking', 0, 1, 0.05, MM, 'Shallow hollow scars over every seen face, like the flake scars of knapped flint: this is the deepest a scar goes (each scar drawn from the range). Where scars meet a sharp ridge stands. Made last, after the cracks: the scars belong to a plane, not a stone, so where stones share a face (the back and ends of a wall) they run across the joints. Scars run off the edges and chip them; a face stays flat only where another stone lies in front of it or rests on it. No scar is steeper than 25° or turns a face down past the overhang target. Faceting is per stone and convex; Flaking is per plane and concave. 0 mm: none.')] },
 ];
 const CHECKS = ['mini'];
 const CLIFF_KEYS = Object.keys(PRESETS.layered);
