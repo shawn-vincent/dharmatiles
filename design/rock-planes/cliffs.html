@@ -362,7 +362,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 0; width: 100%; }
       <li><b>Cells.</b> Each spine is one convex stone, from the layer face it starts on to the one it stops at (each taken as its tangent plane at the spine there). Between it and each spine that shares a layer with it, the stone is cut by the plane halfway between the two spines&rsquo; closest points (measured with Thickness against Width as the proportion, a stretch of the whole wall, so planes stay planes), then by the envelope. The planes are drawn pair by pair and do not have to agree, so some space can be left to no stone. <b>Width</b> and <b>Thickness</b> space the spines; they do not move the planes. <b>Joint</b>, drawn for each pair, moves each side half of it from the halfway plane: over zero a gap opens (separate stones), under zero each reaches past it into its neighbour (they overlap). The cells are not a chain: every contact is known before any stone is carved, so every stone is carved on its own.</li>
       <li><b>Bodies.</b> A spine that runs through several layers is one stone, carved whole. <b>Fuse</b> joins two neighbouring spines whose cells share a face into one body, one draw for each two from a stream of the pair&rsquo;s own; a cell narrower than 3 mm across joins the neighbour it shares the most side face with. A body is carved cell by cell with the faces where its cells meet kept flat, so the slicer fuses them into one stone; a body that rests on nothing the ground holds is joined to a touching body that is held.</li>
       <li><b>The bottom.</b> The stones are placed holders first (a stone can hold another only when its spine ends below the middle of the other&rsquo;s and starts lower, so a neighbour beside it never comes first and one it overlaps deeply does), and each in turn finds what holds it among the stones placed before it, as they stand. Its bottom reaches down to what is under it: it is lowered, kept parallel, until it lies in every top under it within <span data-const="GAPMAX"></span> mm (or on the plate, when the plate is that near), measured at the corners of its outline and every mm inside it, so where its own plane and the tops under it part, it sinks into them. The stones print as one solid, so where they overlap nothing hangs. Then the stone is held wherever another stone (or the plate) lies just under its surface. Each face that looks down, a side face too, is clipped by each stone placed before it as that stone stands, and a holder keeps those places from carving. A <b>flare</b> keeps the cone over the held places: all that lies within <span data-const="FLARE_DEG"></span>&deg; of upright above one (for each direction in plan, the plane at that angle through the held place farthest out). What is left of a face past <span data-const="OVER"></span>&deg; that nothing holds would hang, and is cut off by the plane at <span data-const="FLARE_DEG"></span>&deg; that touches it from inside (of the directions within 45&deg; of the way out from the held places, the one that keeps the most held surface), the largest first. Every plane that cuts a stone faces down less than <span data-const="OVER"></span>&deg;, and a convex stone has no point of a face past <span data-const="OVER"></span>&deg; within <span data-const="FLARE_DEG"></span>&deg; above another of its points, so once those pieces are cut off every face of the stone past <span data-const="OVER"></span>&deg; is held. A stone held nowhere is cut away whole. Where a stone holds another, its top keeps flat the place the stone above rests on most. Every stone rests on the ground or on a stone that does.</li>
-      <li><b>Rocks.</b> Each cell is carved alone, by the same rules whatever the style: the stone is its cell, and every edge that will be seen (two faces turning at least <span data-const="BEV_FLAT"></span>&deg;, the edge not buried in another stone, and a point just outside it in no other stone: overlapping stones whose faces run flush meet flat, with no groove) gets one flat bevel, cut the same distance in on both faces, so at the middle angle between them: <b>Bevel</b> wide (drawn between its two ends at each end of the edge), at most <span data-const="BEV_INR%"></span> of the narrower face&rsquo;s inradius, longest edges first. The bottom, the flat tops under stones above, and the faces where a body&rsquo;s cells meet are kept as they are; no plane is made that faces down past <span data-const="OVER"></span>&deg;, so every overhang left is the bottom&rsquo;s own, and a bevel that would cut what is kept is moved out to it, or not made if less than a third of a nozzle is left. A stone stays inside its cell; Joint is at most &minus;0.2 mm, so neighbouring stones always reach into each other. The stones are left as separate shells, not joined: the slicer fuses them. Draw shows the wall three ways. <b>Finished</b> is the stones as they print: a natural grey that runs a little warm, each stone its own, lit like the rest, the cracks dark and the overhang painted orange (55 to 65&deg;) or red (past 65&deg;), with no outlines. <b>Rocks</b> is the same stones for debugging: each in its own vivid colour, every edge outlined, the bevels paler, the crack network drawn (the lines that became cracks solid, the lines a crack could have followed and did not dashed and fainter) and the overhang painted. <b>Structure</b> is the cells as cut, before carving, each body its own shade, as frosted glass, with the spines, the layer faces and the envelope. A tap selects a stone (a mass, in Structure), outlined in yellow, with its spine in Structure, and opens its page in the sheet (Parts, then the stone: its body, layer and size, what it rests on and what it holds up, as links to those stones); in Finished and Rocks a tap near an edge selects that edge too, drawn in cyan with its report on the stone&rsquo;s page, and the selection stays when the view changes. A tap on empty space clears it, and so does closing the sheet; the mosaic button opens the sheet at its top level. <b>Weathering</b> then cuts each stone by an egg of its own shape, just holding the stone at 0% and just inside it at 100%, so corners go first, then edges, then the faces dome; what a stone rests on or carries, and the downward limit, hold it back.</li>
+      <li><b>Rocks.</b> Each cell is carved alone, by the same rules whatever the style: the stone is its cell, and every edge that will be seen (two faces turning at least <span data-const="BEV_FLAT"></span>&deg;, the edge not buried in another stone, and a point just outside it in no other stone: overlapping stones whose faces run flush meet flat, with no groove) gets one flat bevel, cut the same distance in on both faces, so at the middle angle between them: <b>Bevel</b> wide (drawn between its two ends at each end of the edge), at most <span data-const="BEV_INR%"></span> of the narrower face&rsquo;s inradius, longest edges first. The bottom, the flat tops under stones above, and the faces where a body&rsquo;s cells meet are kept as they are; no plane is made that faces down past <span data-const="OVER"></span>&deg;, so every overhang left is the bottom&rsquo;s own, and a bevel that would cut what is kept is moved out to it, or not made if less than a third of a nozzle is left. A stone stays inside its cell; Joint is at most &minus;0.2 mm, so neighbouring stones always reach into each other. The stones are left as separate shells, not joined: the slicer fuses them. Draw shows the wall three ways. <b>Finished</b> is the stones as they print: a natural grey that runs a little warm, each stone its own, lit like the rest, the cracks dark and the overhang painted orange (55 to 65&deg;) or red (past 65&deg;), with no outlines. <b>Rocks</b> is the same stones for debugging: each in its own vivid colour, every edge outlined, the bevels paler, the crack network drawn (the lines that became cracks solid, the lines a crack could have followed and did not dashed and fainter) and the overhang painted. <b>Structure</b> is the cells as cut, before carving, each body its own shade, as frosted glass, with the spines, the layer faces and the envelope. A tap selects a stone (a mass, in Structure), outlined in yellow, with its spine in Structure, and opens its page in the sheet (Parts, then the stone: its body, layer and size, what it rests on and what it holds up, as links to those stones); in Finished and Rocks a tap near an edge selects that edge too, drawn in cyan with its report on the stone&rsquo;s page, and the selection stays when the view changes. A tap on empty space clears it, and so does closing the sheet; the mosaic button opens the sheet at its top level. <b>Weathering</b> cuts each stone by an egg of its own shape as the stone is placed, before it is held, just holding the stone at 0% and just inside it at 100%, so corners go first, then edges, then the faces dome. Where it meets another stone (its bottom, its sides against its neighbours, the places on its top the stones above meet) it keeps the meeting but the rim, drawn in by the bevel&rsquo;s width, and a ground stone keeps its whole bottom; the stones on either side give up the same rim, and where a stone above then reaches past a rounded rim, holding cuts that part off at the overhang target. So the wall&rsquo;s back and ends weather as its front does, and the joints open into grooves, never through.</li>
       <li><b>Cracks</b> (each style sets its own: Granite 12.5% on a Blocks network, Columns 19.5% on a Columns network, Layered 90% on a Planes network, Fieldstone none, Ashlar 15%; under Rocks, whose page in the settings sheet shows the other crack settings only while Cracks is above 0%) follow one hidden <b>Network</b> over the whole cliff: a table of flat boundaries between cells of seeds on a grid, in one, two or three axes: <b>Planes</b> across the vertical (bedding), <b>Columns</b> along it, or <b>Blocks</b>, spaced by the middle of <b>Spacing</b>, each seed moved within its spread, and each boundary carrying the rank at which a crack would reach it (cracks start at even shares and grow from line to line, turning least, branching with the chance <b>Branching</b>, <span data-const="CRACK_LINES"></span> lines to a crack on average). The table is made once for each Network, Spacing and Branching (the first wall that needs one waits for it) and the wall takes it at a seeded offset. Where a boundary crosses a stone&rsquo;s upright or upward faces it is a trace, and it is cut where those faces are the wall&rsquo;s outside (front, top, back and ends alike) or bevels, not where one stone meets another; <b>Cracks</b> picks each stone&rsquo;s own share of its traces&rsquo; length, in rank order, so raising it only adds cracks, and a crack never runs from one stone into another. A boundary a face meets at less than <span data-const="GRAZE"></span>&deg; (it would take off a skin) takes none. A trace is walked in short steps (<b>Wiggle</b>: each step <span data-const="WIGGLE_STEP"></span> mm, its heading turned by up to this share of <span data-const="WIGGLE_TURN"></span>&deg; and kept within the share, so a crack meanders), and cut as a groove of one V: two walls that meet in a sharp line, each <span data-const="GROOVE"></span>&deg; off the face&rsquo;s inward normal, <b>Opening</b> apart at the face (at most <span data-const="OPENING_MOST"></span> mm), so on an upright face its roof faces down at the overhang target whichever way the crack runs, and a wall that would face down past it is turned up to it. A free end tapers to nothing, its depth falling 1 in <span data-const="TAPER"></span>; an end that meets another crack, or the stone&rsquo;s outline where it touches another stone or the ground, runs off at full size; and a stretch that holds a stone (where it rests, or wherever a face of it that looks down lies on this one) or lies on a bottom is left whole. Each face the grooves touch is cut in its own plane into the convex pieces outside them, and merged back to as few as keep it convex. The faces inside a crack are drawn dark grey.</li>
       <li><b>Overhang is painted after the wall is shown.</b> The wall appears as soon as it is built; a pass over the finished stones then marks every downward face past <span data-const="OVER"></span>&deg; that is not held, and the page paints it orange (55 to 65&deg;) or red (past 65&deg;), and reports each share of the downward area and the area unsupported. A downward face is held where another stone lies under it (within 0.2 mm), or on a line between two held places of its own stone at most Bridge apart; the ground holds what touches it. A face is painted whole when any of it is unheld. Each of orange and red may be 0.1% of the downward area. Red and orange on a model mean overhang only; the inside of a crack is dark grey.</li>
     </ol>
@@ -760,7 +760,7 @@ function edgesNow() {   // the stone's edges now: each with its two faces; each 
 const drawAt = (x, y, z, k) => (hash2(hash2(hash2(CKEY, Math.round(x * 100)), hash2(Math.round(y * 100), Math.round(z * 100))), k) >>> 0) / 4294967296;
 function bevelAll(grd) {
   EROWS = [ERK.length, ERK.length]; if (!(BEV.hi > 0)) return;   // Bevel 0: no cuts (EROWS: this stone's range of the report)
-  const open = DX && DX.open, glued = DX && DX.glued, flat = Math.cos(BEV.flat * DEG), eps = BEV.eps, weathered = BEV.whi > 0;
+  const open = DX && DX.open, glued = DX && DX.glued, flat = Math.cos(BEV.flat * DEG), eps = BEV.eps;
   const pk = (s1, s2) => s1 < s2 ? s1 * MAXSL + s2 : s2 * MAXSL + s1, isGlued = s => glued && (sKind[s] & 15) === KIND.SIDE && glued(sKind[s] >> 4);
   const tried = new Map(), seenOf = new Map(), cutFor = new Map();   // by face pair: the attempt (its index in AT*), and whether the edge is seen; by cut face: its attempt
   for (let s = 0; s < nSL; s++) sRound[s] = 0;
@@ -873,7 +873,6 @@ function bevelAll(grd) {
     }
     if (!made) break;
   }
-  if (weathered && !empty) weatherEgg(isGlued, grd);
   if (empty) return;
   // the edge report: every edge of the stone as carved, and what became of it; the seen edges left sharp also go to UNB (drawn magenta)
   const nF_ = edgesNow(), minEdge = Math.cos(10 * DEG), bv = k => k === KIND.BEVEL || k === KIND.PART;
@@ -897,14 +896,15 @@ function bevelAll(grd) {
   }
   EROWS[1] = ERK.length;
 }
-// Weathering: the stone is cut by an egg. The egg is the ellipsoid of the stone's own spread (its corners' covariance about their centre), scaled
-// so that at 0% it just holds the stone and at 100% it just fits inside it (touching the nearest face); the Weathering draw (once a stone) sets
-// where between. The stone keeps what lies in the egg: corners go first, then edges, then the faces dome, as a block weathers to a boulder. The
-// egg is cut as its tangent planes at WEGG directions spread evenly over it (turned for each stone). A piece fused to others is cut by the egg of
-// itself and the pieces of its body that touch it (fitted to their cells, drawn and turned once for the body), so two fused parts share one egg and
-// weather as one rock; a lone stone's egg is its own. Every plane goes through `place`: none faces
-// down past the limit, a guard pushes it out, and a cut under MINBITE is not made. Every surface weathers, the wall's ends and back as the front, but the base:
-// a ground stone's bottom is the wall's support layer and stays whole and flat.
+// Weathering: the stone's cell is cut by an egg as it is placed, before it is held, so the holding pass sees the rounded stone: where a stone
+// above reaches past a holder's rounded rim, that part of it is not held and the holding cuts it off at the overhang target, so the two give up
+// the same rim and nothing has to stop the egg. The egg is the ellipsoid of the stone's own spread (its corners' covariance about their centre),
+// scaled so that at 0% it just holds the stone and at 100% it just fits inside it (touching the nearest face); the Weathering draw (once a stone)
+// sets where between. The stone keeps what lies in the egg: corners go first, then edges, then the faces dome, as a block weathers to a boulder.
+// The egg is cut as its tangent planes at WEGG directions spread evenly over it (turned for each stone). A piece fused to others is cut by the egg
+// of itself and the pieces of its body that touch it (fitted to their cells, drawn and turned once for the body), so two fused parts share one egg
+// and weather as one rock; a lone stone's egg is its own. No plane faces down past the overhang target, and a cut under MINBITE is not made.
+// Every surface weathers, the wall's ends and back as the front, but the base: a ground stone's bottom is the wall's support layer and stays whole and flat.
 const WEGG = 56, eggP = (() => { const o = []; for (let i = 0; i < WEGG; i++) { const z = 1 - 2 * (i + 0.5) / WEGG, r = Math.sqrt(1 - z * z), a = i * Math.PI * (3 - Math.sqrt(5)); o.push([r * Math.cos(a), r * Math.sin(a), z]); } return o; })();
 function eig3(m) {   // Jacobi: the eigenvalues and eigenvectors (columns of V) of a symmetric 3x3
   const a = [[m[0], m[1], m[2]], [m[1], m[3], m[4]], [m[2], m[4], m[5]]], V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
@@ -916,41 +916,37 @@ function eig3(m) {   // Jacobi: the eigenvalues and eigenvectors (columns of V) 
   }
   return { L: [a[0][0], a[1][1], a[2][2]], V };
 }
-let EGGX = null, EGGF = null, WKEY = 0;   // EGGX: the corners the egg is fitted to (this piece and the pieces fused to it; null: the stone as it is); WKEY: the body's key for its draws
-function weatherEgg(isGlued, grd) {
-  const used = new Uint8Array(nVS), base = [];   // base: the corners of a ground stone's bottom (the wall's base stays whole and flat: no cut passes them)
-  for (let s_ = 0; s_ < nSL; s_++) { const m = sLen[s_]; if (!m) continue; const isB = grd && (sKind[s_] & 15) === KIND.BOT; for (let k = 0; k < m; k++) { const v = sV[s_ * CAPS + k]; used[v] = 1; if (isB) base.push(v); } }
-  let P = EGGX; if (!P) { P = []; for (let v = 0; v < nVS; v++) if (used[v]) P.push(vx[v], vy[v], vz[v]); }
-  const n = P.length / 3; if (n < 4) return; let cx = 0, cy = 0, cz = 0; for (let i = 0; i < P.length; i += 3) { cx += P[i]; cy += P[i + 1]; cz += P[i + 2]; } cx /= n; cy /= n; cz /= n;
-  const dw = k => EGGX ? (hash2(WKEY, k) >>> 0) / 4294967296 : drawAt(cx, cy, cz, k);
-  const w = BEV.wlo + (BEV.whi - BEV.wlo) * dw(50); if (!(w > 0)) return;
+/* the egg's planes for the cell as clipped now, each clipped in as it is made: P the corners the egg is fitted to (flat xyz), F the outer faces' planes
+   (flat n,d) its inside is measured to, base the points no plane may pass (pushed out past them), dw the stone's draws, fused: the body's egg (never under 40% of its outer one) */
+function eggCut(P, F, base, dw, fused) {
+  const out = [], n = P.length / 3; if (n < 4) return out; let cx = 0, cy = 0, cz = 0; for (let i = 0; i < P.length; i += 3) { cx += P[i]; cy += P[i + 1]; cz += P[i + 2]; } cx /= n; cy /= n; cz /= n;
+  const w = BEV.wlo + (BEV.whi - BEV.wlo) * dw(cx, cy, cz, 50); if (!(w > 0)) return out;
   const C = [0, 0, 0, 0, 0, 0];
   for (let i = 0; i < P.length; i += 3) { const x = P[i] - cx, y = P[i + 1] - cy, z = P[i + 2] - cz; C[0] += x * x; C[1] += x * y; C[2] += x * z; C[3] += y * y; C[4] += y * z; C[5] += z * z; }
   const { L, V } = eig3(C.map(c => c / n)), sd = L.map(l => Math.sqrt(Math.max(l, 1e-6)));
   // in the egg's frame (axes V, scaled by sd) the egg is a ball: a point's egg radius, and a direction's support
   const rad = (x, y, z) => { let r = 0; for (let i = 0; i < 3; i++) { const t = (V[0][i] * x + V[1][i] * y + V[2][i] * z) / sd[i]; r += t * t; } return Math.sqrt(r); };
   const sup = (ux, uy, uz) => { let r = 0; for (let i = 0; i < 3; i++) { const t = (V[0][i] * ux + V[1][i] * uy + V[2][i] * uz) * sd[i]; r += t * t; } return Math.sqrt(r); };
-  let sOut = 0; for (let i = 0; i < P.length; i += 3) sOut = Math.max(sOut, rad(P[i] - cx, P[i + 1] - cy, P[i + 2] - cz)); for (let v = 0; v < nVS; v++) if (used[v]) sOut = Math.max(sOut, rad(vx[v] - cx, vy[v] - cy, vz[v] - cz));
-  edgesNow(); let sIn = Infinity;
-  if (EGGF) for (let i = 0; i < EGGF.length; i += 4) { const nx = EGGF[i], ny = EGGF[i + 1], nz = EGGF[i + 2]; sIn = Math.min(sIn, (EGGF[i + 3] - nx * cx - ny * cy - nz * cz) / sup(nx, ny, nz)); }
-  else
-  for (let s_ = 0; s_ < nSL; s_++) if (sLen[s_] && fOk[s_] && !isGlued(s_)) { const nx = fN[3 * s_], ny = fN[3 * s_ + 1], nz = fN[3 * s_ + 2], d = nx * (fC[3 * s_] - cx) + ny * (fC[3 * s_ + 1] - cy) + nz * (fC[3 * s_ + 2] - cz); sIn = Math.min(sIn, d / sup(nx, ny, nz)); }
-  if (EGGF) sIn = Math.max(sIn, 0.4 * sOut);   /* a fused rock's planes run past its other parts: the egg never shrinks under 40% of the one that holds it */
-  if (!(sIn > 0) || !(sOut > sIn)) return;
+  let sOut = 0; for (let i = 0; i < P.length; i += 3) sOut = Math.max(sOut, rad(P[i] - cx, P[i + 1] - cy, P[i + 2] - cz));
+  let sIn = Infinity; for (let i = 0; i < F.length; i += 4) { const nx = F[i], ny = F[i + 1], nz = F[i + 2]; sIn = Math.min(sIn, (F[i + 3] - nx * cx - ny * cy - nz * cz) / sup(nx, ny, nz)); }
+  if (fused) sIn = Math.max(sIn, 0.4 * sOut);   /* a fused rock's planes run past its other parts: the egg never shrinks under 40% of the one that holds it */
+  if (!(sIn > 0) || !(sOut > sIn)) return out;
   const S = sOut + (sIn - sOut) * w;
   // the directions, turned for this stone (a random rotation from three draws), as points on the egg; each point's tangent plane
-  const q0 = dw(51), q1 = dw(52) * TWO_PI, q2 = dw(53) * TWO_PI, r1 = Math.sqrt(1 - q0), r2 = Math.sqrt(q0);
+  const q0 = dw(cx, cy, cz, 51), q1 = dw(cx, cy, cz, 52) * TWO_PI, q2 = dw(cx, cy, cz, 53) * TWO_PI, r1 = Math.sqrt(1 - q0), r2 = Math.sqrt(q0);
   const qa = r1 * Math.sin(q1), qb = r1 * Math.cos(q1), qc = r2 * Math.sin(q2), qd = r2 * Math.cos(q2);   // a unit quaternion (qd the real part)
   const rot = (x, y, z) => { const tx = 2 * (qb * z - qc * y), ty = 2 * (qc * x - qa * z), tz = 2 * (qa * y - qb * x); return [x + qd * tx + (qb * tz - qc * ty), y + qd * ty + (qc * tx - qa * tz), z + qd * tz + (qa * ty - qb * tx)]; };
   for (const p0 of eggP) {
     const p = rot(p0[0], p0[1], p0[2]);
     let ux = 0, uy = 0, uz = 0; for (let i = 0; i < 3; i++) { const t = p[i] / sd[i]; ux += V[0][i] * t; uy += V[1][i] * t; uz += V[2][i] * t; }
-    const ul = Math.hypot(ux, uy, uz); ux /= ul; uy /= ul; uz /= ul;
+    const ul = Math.hypot(ux, uy, uz); ux /= ul; uy /= ul; uz /= ul; if (uz < -SINO - 1e-9) continue;
     let want = ux * cx + uy * cy + uz * cz + S * sup(ux, uy, uz);
-    for (const v of base) { const d = ux * vx[v] + uy * vy[v] + uz * vz[v]; if (d > want) want = d; }
-    supN = nVS; if (!place(ux, uy, uz, 0, want, Infinity)) continue;
-    clipS(pN[0], pN[1], pN[2], pB[0], KIND.BEVEL); nP = 0; if (empty) return;
+    for (let i = 0; i < base.length; i += 3) { const d = ux * base[i] + uy * base[i + 1] + uz * base[i + 2]; if (d > want) want = d; }
+    let top = -Infinity; for (let f = 0; f < nF; f++) { const o = fo[f]; for (let k = 0, m = fl[f]; k < m; k++) { const v = fv[o + k], d = ux * vx[v] + uy * vy[v] + uz * vz[v]; if (d > top) top = d; } }
+    if (!(want < top - MINBITE)) continue;
+    clip(ux, uy, uz, want, KIND.BEVEL); out.push([ux, uy, uz, want]); if (empty) break;
   }
+  return out;
 }
 // a stone: its guards, then its cuts, in the slotted faces and back
 function carveFast(kp, grd) { guardsOf(kp); toSlots(); supN = nVS; relocate(); bevelAll(grd); if (!empty) fromSlots(); }
@@ -1181,6 +1177,31 @@ function wall(seed, P, opt = {}) {
   const botN = (p, x, y) => { let z = p.botPl[0] * x + p.botPl[1] * y + p.botPl[2]; if (p.botX) for (const b of p.botX) { const v = b[0] * x + b[1] * y + b[2]; if (v > z) z = v; } return z; }, botZ = (p, x, y) => botN(p, x, y) - p.sink;
   const clipBot = p => { const L = p.bgL, bg = p.botPl; clip(bg[0] / L, bg[1] / L, -1 / L, (-bg[2] + p.sink) / L, KIND.BOT); if (p.botX) for (const b of p.botX) { const l = Math.hypot(b[0], b[1], 1); clip(b[0] / l, b[1] / l, -1 / l, (-b[2] + p.sink) / l, KIND.BOT); } };
   const tz_ = (pl, x, y) => pl[0] * x + pl[1] * y + pl[2];
+  /* a stone's cell as it was placed: its bottom and its Weathering cut (kept once made; before, its cell and bottom) */
+  const cellOf = p => { if (p.cell) { restore(p.cell); return; } restore(p.snap); if (!p.ground) clipBot(p); };
+  /* a cell's corners (flat xyz) and its outer faces' planes (flat n,d; a side glued to its own body is inside the rock), as clipped now; base: a ground stone's bottom corners */
+  const cellRead = (p, P, F, base) => { const seen = new Set(), body = find(p.s.id); for (let f = 0; f < nF; f++) { const o = fo[f], m = fl[f], k = ft[f] < 0 ? -1 : ft[f] & 15;
+      for (let i = 0; i < m; i++) { const v = fv[o + i]; if (!seen.has(v)) { seen.add(v); P.push(vx[v], vy[v], vz[v]); } if (base && k === KIND.BOT) base.push(vx[v], vy[v], vz[v]); }
+      if (k === KIND.SIDE) { const e = p.planes[ft[f] >> 4]; if (e && e[5] >= 0 && find(e[5]) === body) continue; }
+      let nx = 0, ny = 0, nz = 0; for (let i = 0; i < m; i++) { const a = fv[o + i], b = fv[o + (i + 1) % m]; nx += (vy[a] - vy[b]) * (vz[a] + vz[b]); ny += (vz[a] - vz[b]) * (vx[a] + vx[b]); nz += (vx[a] - vx[b]) * (vy[a] + vy[b]); }
+      const L = Math.hypot(nx, ny, nz); if (L < 1e-9) continue; nx /= L; ny /= L; nz /= L; const a0 = fv[o]; F.push(nx, ny, nz, nx * vx[a0] + ny * vy[a0] + nz * vz[a0]); } };
+  /* where a stone meets another, it keeps the meeting but its rim: each place drawn in toward its middle by the bevel's width (to no less than 0.4
+     of the way, no more than 0.85), as a bottom is kept; the stones on either side give up the same rim */
+  const rimIn = (poly, out) => { const m = poly.length; if (m < 3) return; let cx = 0, cy = 0, cz = 0; for (const v of poly) { cx += v[0]; cy += v[1]; cz += v[2]; } cx /= m; cy /= m; cz /= m;
+    for (const v of poly) { const dv = Math.hypot(v[0] - cx, v[1] - cy, v[2] - cz), t = Math.max(0.4, Math.min(0.85, 1 - BEV.hi / Math.max(dv, 1e-9))); out.push(cx + (v[0] - cx) * t, cy + (v[1] - cy) * t, cz + (v[2] - cz) * t); } };
+  /* Weathering, as a stone is placed: the egg of it (and of the pieces of its body that touch it, as their cells stand) is cut into its cell, left
+     clipped. It keeps a ground stone's bottom whole, and the rest of its bottom, its sides against other stones and the places on its tops the stones
+     above meet but their rims; holding, after it, cuts off what a stone above then has nothing under */
+  const eggOf = q => {
+    q.egg = []; if (!(BEV.whi > 0) || opt.cells) { restore(q.snap); if (!q.ground) clipBot(q); q.cell = snap(); return; }
+    const P = [], F = [], G = groups.get(q.grp), b = q.bb; let fused = false;
+    for (const o of G.pieces) { if (o === q) continue; const a = o.bb; if (a[1] < b[0] - 0.3 || b[1] < a[0] - 0.3 || a[3] < b[2] - 0.3 || b[3] < a[2] - 0.3 || a[5] < b[4] - 0.3 || b[5] < a[4] - 0.3) continue;
+      cellOf(o); if (!empty) { cellRead(o, P, F, null); fused = true; } }
+    restore(q.snap); if (!q.ground) clipBot(q); const base = []; cellRead(q, P, F, q.ground ? base : null);
+    for (let f = 0; f < nF; f++) { const k = ft[f] < 0 ? -1 : ft[f] & 15, e = k === KIND.SIDE ? q.planes[ft[f] >> 4] : null; if ((k === KIND.BOT && !q.ground) || (e && e[5] >= 0)) rimIn(faceXYZ(f), base); }
+    for (const q2 of above.get(q) || []) for (const t of q.tops) { const ov = inter2(ccw(t.poly), q2.bot); if (ov && Math.abs(area2(ov)) > 0.03) rimIn(ov.map(v => [v[0], v[1], tz_(t.pl, v[0], v[1])]), base); }
+    const key = hash2(seed, 7900 + G.id);
+    q.egg = eggCut(P, F, base, fused ? (x, y, z, k) => (hash2(key, k) >>> 0) / 4294967296 : (x, y, z, k) => (CKEY = hash2(seed, 7700 + q.id), drawAt(x, y, z, k)), fused); q.cell = snap(); };
   function groundIt(q) {   // a stone near the plate that no holder reaches stands on the ground: its cell is made again with a flat bottom at zero
       if (!remake(q, () => [0, 0, -1, 0])) return false;
       q.botPl = [0, 0, 0]; q.botX = []; q.bgL = 1; q.sink = 0; q.ground = true; return true;
@@ -1198,8 +1219,7 @@ function wall(seed, P, opt = {}) {
   let noHold = 0;
   /* the stones are placed holders first, whichever way the spines run: a stone comes after every stone whose top lies under it (ties and loops by
      height); each finds what holds it among those placed before it */
-  const placing = (() => {
-    const below = new Map(pieces.map(p => [p, []]));
+  const below = new Map(pieces.map(p => [p, []])), placing = (() => {
     for (const q of pieces) { if (!q.bot) continue; const b = q.bb; for (const p of pieces) { if (p === q) continue; const a = p.bb; if (a[1] < b[0] || b[1] < a[0] || a[3] < b[2] || b[3] < a[2] || a[4] > b[5]) continue;
       if (p.tops.some(t => { const ov = inter2(ccw(t.poly), q.bot); return ov && Math.abs(area2(ov)) > 0.03 && under(t, ov, q, p); })) below.get(q).push(p); } }
     const out = [], left = new Set(pieces), byZ = pieces.slice().sort((a, b) => a.bb[4] - b.bb[4] || a.id - b.id);
@@ -1221,9 +1241,10 @@ function wall(seed, P, opt = {}) {
     return o; };
   /* a convex polygon in 3D cut by a plane (kept where n.x <= d), the outward direction of an edge within its face, */
   const cut3 = (P, a, b, c, d) => { const o = []; for (let i = 0, m = P.length; i < m; i++) { const u = P[i], v = P[(i + 1) % m], su = a * u[0] + b * u[1] + c * u[2] - d, sv = a * v[0] + b * v[1] + c * v[2] - d; if (su <= 0) o.push(u); if ((su < 0 && sv > 0) || (su > 0 && sv < 0)) { const t = su / (su - sv); o.push([u[0] + t * (v[0] - u[0]), u[1] + t * (v[1] - u[1]), u[2] + t * (v[2] - u[2])]); } } return o; };
+  const allIn = (P, h) => { for (let i = 0; i < P.length; i++) { const v = P[i]; if (h[0] * v[0] + h[1] * v[1] + h[2] * v[2] > h[3]) return false; } return true; };   /* a polygon wholly on the kept side of a plane: no cut */
   const outIn = (u, v, n) => { const ex = v[0] - u[0], ey = v[1] - u[1], ez = v[2] - u[2], x = ey * n[2] - ez * n[1], y = ez * n[0] - ex * n[2], z = ex * n[1] - ey * n[0], l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; };
   /* a done stone as it stands (its cell, its bottom and its flare) moved up by HELDEPS: its faces' planes and its box, made once (it is not cut again) */
-  const heldBy = p => { if (p._hs) return p._hs; restore(p.snap); if (!p.ground) clipBot(p); if (!opt.cells) for (const e of p.flare) clip(e[0], e[1], e[2], e[3], KIND.FLARE);
+  const heldBy = p => { if (p._hs) return p._hs; cellOf(p); if (!opt.cells) for (const e of p.flare) clip(e[0], e[1], e[2], e[3], KIND.FLARE);
     const hs = [], bb = [1e9, -1e9, 1e9, -1e9, 1e9, -1e9];
     if (!empty) for (let f = 0; f < nF; f++) { const fx = faceXYZ(f), m = fx.length; let nx = 0, ny = 0, nz = 0;
       for (let k = 0; k < m; k++) { const a = fx[k], b = fx[(k + 1) % m]; nx += (a[1] - b[1]) * (a[2] + b[2]); ny += (a[2] - b[2]) * (a[0] + b[0]); nz += (a[0] - b[0]) * (a[1] + b[1]); if (a[0] < bb[0]) bb[0] = a[0]; if (a[0] > bb[1]) bb[1] = a[0]; if (a[1] < bb[2]) bb[2] = a[1]; if (a[1] > bb[3]) bb[3] = a[1]; if (a[2] < bb[4]) bb[4] = a[2]; if (a[2] > bb[5]) bb[5] = a[2]; }
@@ -1262,9 +1283,9 @@ function wall(seed, P, opt = {}) {
       for (const { fx, n, bx } of F_) {
         const tries = bx[4] <= PLATEZ ? [[-1, [[0, 0, 1, PLATEZ]]]] : [];
         for (const [id, h] of hold) { const b = h.bb; if (b[0] > bx[1] || b[1] < bx[0] || b[2] > bx[3] || b[3] < bx[2] || b[4] > bx[5] || b[5] < bx[4]) continue; if (h.hs.some(e => fx.every(v => e[0] * v[0] + e[1] * v[1] + e[2] * v[2] >= e[3]))) continue; tries.push([id, h.hs]); }
-        const hp = []; for (const [by, hs] of tries) { let P = fx; for (const h of hs) { P = cut3(P, h[0], h[1], h[2], h[3]); if (P.length < 3) break; } if (P.length < 3 || polyArea(P) < 1e-4) continue; hp.push({ by, P }); for (const v of P) pts.push(v); }
+        const hp = []; for (const [by, hs] of tries) { let P = fx; for (const h of hs) { if (allIn(P, h)) continue; P = cut3(P, h[0], h[1], h[2], h[3]); if (P.length < 3) break; } if (P.length < 3 || polyArea(P) < 1e-4) continue; hp.push({ by, P }); for (const v of P) pts.push(v); }
         down.push({ fx, n, over: n[2] < -SINO, hp }); }
-      restore(q.snap); clipBot(q);
+      cellOf(q);
       /* the flare: the stone keeps the cone over its held places, all that lies within FLARE_DEG of upright above one (for each direction in plan, the
          plane at that angle through the held point farthest out). A stone held nowhere would hang whole: it is cut away */
       const Q = pts.length >= 3 ? coneOf(pts) : [];
@@ -1293,15 +1314,16 @@ function wall(seed, P, opt = {}) {
         const glue = p.grp === q.grp; if (t && !glue) { (t.supPat || (t.supPat = [])).push(plan); (t.supBy || (t.supBy = [])).push(q.id); } return { holder: p, poly: plan, glue, t }; });
     }
   };
+  const above = new Map(); for (const [q, ps] of below) for (const p of ps) { let l = above.get(p); if (!l) above.set(p, l = []); l.push(q); }
   for (const q of placing) {
     q.done = true;
     if (!q.bot) groundIt(q);
-    if (!q.bot) { q.B = null; continue; }
+    if (!q.bot) { q.B = null; eggOf(q); continue; }
     q.B = q.bot;
-    if (q.ground) { q.onGround = true; continue; }
-    lower(q); restore(q.snap); clipBot(q); hold(q); if (q.dead) continue;
+    if (q.ground) { q.onGround = true; eggOf(q); continue; }
+    lower(q); eggOf(q); hold(q); if (q.dead) continue;
     /* a piece its bottom and flare cut to nothing is dead: found now, so no piece above rests on it or is laid through it */
-    restore(q.snap); clipBot(q); if (!opt.cells) for (const fl_ of q.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
+    cellOf(q); if (!opt.cells) for (const fl_ of q.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
     if (empty) q.dead = true;
   }
   lap('holding');
@@ -1375,7 +1397,7 @@ function wall(seed, P, opt = {}) {
   for (const q of pieces) { if (q.dead) continue; const b = q.bb; for (let ix = Math.floor(b[0] / PGX); ix <= Math.floor(b[1] / PGX); ix++) for (let iy = Math.floor(b[2] / PGY); iy <= Math.floor(b[3] / PGY); iy++) for (let iz = Math.floor(b[4] / PGZ); iz <= Math.floor(b[5] / PGZ); iz++) { const k = ((ix + 64) * 128 + (iy + 64)) * 128 + iz + 64; let l = pgrid.get(k); if (!l) pgrid.set(k, l = []); l.push(q); } }
   const inside = (q, x, y, z) => {
     for (const e of q.planes) { if (isBot(e)) { if (z < botZ(q, x, y)) return false; continue; } if (e[0] * x + e[1] * y + e[2] * z > e[3]) return false; }
-    for (const f of q.flare) if (f[0] * x + f[1] * y + f[2] * z > f[3]) return false; return true;
+    for (const f of q.flare) if (f[0] * x + f[1] * y + f[2] * z > f[3]) return false; if (q.egg) for (const f of q.egg) if (f[0] * x + f[1] * y + f[2] * z > f[3]) return false; return true;
   };
   // the carve's two questions of a piece: where a point lies in no other stone (open), and which side faces are glued to a neighbour
   function seenData(pc, find, G) {
@@ -1384,20 +1406,8 @@ function wall(seed, P, opt = {}) {
     const glued = i => { const pl = pc.planes[i]; return !pl || pl[4] !== KIND.SIDE || find(pl[5]) === G.id; };
     return { open, glued };
   }
-  // a piece's cell as it stands before carving (its bottom and flare cut): its corners, for the egg of the parts fused to it
-  // and its outer faces' planes (a side glued to its own body is inside the rock, not outer)
-  const cellPts = p => { if (p.cellPts) return p.cellPts; restore(p.snap); if (!p.ground) clipBot(p); if (!opt.cells) for (const fl_ of p.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
-    const out = [], fc = []; if (!empty) { const seen = new Set(), body = find(p.s.id); for (let f = 0; f < nF; f++) { const o = fo[f], m = fl[f];
-      for (let k = 0; k < m; k++) { const v = fv[o + k]; if (!seen.has(v)) { seen.add(v); out.push(vx[v], vy[v], vz[v]); } }
-      if ((ft[f] & 15) === KIND.SIDE) { const e = p.planes[ft[f] >> 4]; if (e && find(e[5]) === body) continue; }
-      let nx = 0, ny = 0, nz = 0; for (let k = 0; k < m; k++) { const a = fv[o + k], b = fv[o + (k + 1) % m]; nx += (vy[a] - vy[b]) * (vz[a] + vz[b]); ny += (vz[a] - vz[b]) * (vx[a] + vx[b]); nz += (vx[a] - vx[b]) * (vy[a] + vy[b]); }
-      const L = Math.hypot(nx, ny, nz); if (L < 1e-9) continue; nx /= L; ny /= L; nz /= L; const a0 = fv[o]; fc.push(nx, ny, nz, nx * vx[a0] + ny * vy[a0] + nz * vz[a0]); } }
-    p.cellFaces = fc; return p.cellPts = out; };
   const emitPiece = (G, pc) => {   // its own function: `wall` is past the size V8 will optimize
-    /* Weathering's egg is fitted to this piece and the pieces of its body that touch it (a lone stone: itself alone); its draws are the body's */
-    if (BEV.whi > 0 && !opt.cells) { const b = pc.bb, pts = cellPts(pc).slice(), fcs = pc.cellFaces.slice(); for (const o of G.pieces) { if (o === pc) continue; const a = o.bb; if (a[1] < b[0] - 0.3 || b[1] < a[0] - 0.3 || a[3] < b[2] - 0.3 || b[3] < a[2] - 0.3 || a[5] < b[4] - 0.3 || b[5] < a[4] - 0.3) continue; for (const v of cellPts(o)) pts.push(v); for (const v of o.cellFaces) fcs.push(v); } EGGX = pts; EGGF = fcs; WKEY = hash2(seed, 7900 + G.id); }
-    restore(pc.snap); let pEdges = null;
-    if (!pc.ground) clipBot(pc);
+    cellOf(pc); let pEdges = null;
     if (!opt.cells) for (const fl_ of pc.flare) clip(fl_[0], fl_[1], fl_[2], fl_[3], KIND.FLARE);
     if (empty) return;
     const f0 = nFace;
@@ -1413,7 +1423,7 @@ function wall(seed, P, opt = {}) {
     if (opt.cells) { if (empty) return; emitFaces(); }
     else {
       const tc = now(); DX = seenData(pc, find, G); CKEY = hash2(seed, 7700 + pc.id); KPTAG = G.kpTag; KPWHO = G.kpWho; BEVW = BEV.hi;
-      carveFast(G.kp, !!(pc.ground || pc.onGround)); EGGX = null; EGGF = null; KPTAG = null; KPWHO = null; pc.W = BEVW; BEVW = null; pEdges = EROWS; EROWS = null; DX = null; TC += now() - tc; if (empty) return;
+      carveFast(G.kp, !!(pc.ground || pc.onGround)); KPTAG = null; KPWHO = null; pc.W = BEVW; BEVW = null; pEdges = EROWS; EROWS = null; DX = null; TC += now() - tc; if (empty) return;
       emitFaces();
     }
     pc.fr = [f0, nFace];   // its faces in the wall's buffers, for the joins' overlap
@@ -2545,7 +2555,7 @@ const GROUPS = [
     R_('joint', 'Joint', -20, -0.2, 0.1, MM, 'Where two stones meet, drawn for each pair: each stops half of it short of the split, so below zero they reach into each other. It is at most −0.2 mm: stones always overlap and print as one solid. It changes each stone’s size; nothing moves.')] },
   { label: 'Rocks', icon: () => ICON.rocks, value: 'bevel', items: [
     R_('bevel', 'Bevel', 0, 5, 0.1, MM, 'The first cut on every exposed edge and corner: how much it takes off each face, the same on both, drawn for each end of each edge. Printability and what a stone rests on or carries cap it.'),
-    R_('weather', 'Weathering', 0, 100, 5, '%', 'How worn the stones are: each is cut by an egg of its own shape, at 0% just holding the stone (only the Bevel), at 100% just inside it. Corners go first, then edges, then the faces dome. Drawn once a stone; every surface weathers; printability and what a stone rests on or carries hold it back.'),
+    R_('weather', 'Weathering', 0, 100, 5, '%', 'How worn the stones are: each is cut by an egg of its own shape, at 0% just holding the stone (only the Bevel), at 100% just inside it. Corners go first, then edges, then the faces dome. Drawn once a stone; every surface weathers. Where stones meet, each keeps the meeting but its rim, so joints open into grooves, never through.'),
     P_('bridge', 'Bridge', 0, 40, 0.5, MM, `The longest span the overhang measure lets a face bridge between two held points; past it, a point must be held itself (0: every point held). A printer’s limit. The stones bridge nothing: every face of theirs past ${OVER}° is held.`),
     P_('cracks', 'Cracks', 0, 100, 1, '%', 'The share of the network’s lines cut as cracks, by length, on every stone alike: 0% none (the other crack settings are then hidden and do nothing; they keep their values), 100% every line on every stone. A crack runs on from line to line, turning least, and never from one stone into another; a weathered stone is not cracked. Raising it only adds cracks: they start on every stone and grow longer.'),
     { key: 'network', label: 'Network', shownWhile: 'cracks', choices: [['planes', 'Planes'], ['columns', 'Columns'], ['blocks', 'Blocks']], help: 'How the hidden network that cracks follow divides the rock: Planes across the Direction (bedding), Columns along it (prisms), or Blocks (cells every way). One network for the whole cliff, so its lines carry on from stone to stone.' },
