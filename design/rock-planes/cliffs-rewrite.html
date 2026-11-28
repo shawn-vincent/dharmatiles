@@ -1,0 +1,270 @@
+<title>Cliffs from Scratch</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column of a design report, wide tables and the pipeline figure scroll in their own boxes. Tokens are the dharmatiles visual system's (Lichen & Linen by day, Moonpool at night). */
+:root {
+  --f-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-code: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --bg: #F3F2EC; --panel: #E6EAE1; --raised: #FCFCF8; --line: #C9D1C8; --line-2: #AEBBB0;
+  --ink: #1D2922; --muted: #657168;
+  --accent: #287B62; --accent-soft: #D4E6DC; --on-accent: #F5FFF9;
+  --ok: #397A55; --err: #B83B2E; --band: #C46A10;
+  --r: 5px; --r-lg: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-soft: #123A3A; --on-accent: #051513;
+  --ok: #5CC28A; --err: #F07A6A; --band: #F0A050;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-soft: #123A3A; --on-accent: #051513;
+  --ok: #5CC28A; --err: #F07A6A; --band: #F0A050;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/24px var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 64px; margin: 0; }
+.wrap { max-width: 860px; margin: 0 auto; display: grid; gap: 28px; }
+header { display: grid; gap: 8px; }
+h1 { font: 800 40px/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin: 0; text-wrap: balance; }
+h2 { font: 800 26px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; margin: 0 0 4px; text-wrap: balance; }
+h3 { font: 600 16px/1.3 var(--f-body); margin: 12px 0 2px; }
+p, li { max-width: 68ch; }
+p { margin: 6px 0; }
+ul, ol { margin: 6px 0; padding-left: 22px; }
+li { margin: 4px 0; }
+.lede { color: var(--muted); font-size: 16px; line-height: 25px; margin: 0; }
+.meta { font: 12px/18px var(--f-code); color: var(--muted); }
+section { display: grid; gap: 6px; }
+code, .mono { font-family: var(--f-code); font-size: 13px; }
+.box { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; }
+.rec { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-lg); padding: 14px 16px; }
+.rec h3 { margin-top: 0; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 20px; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+td.n { font-family: var(--f-code); font-size: 13px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+tr.hot td { background: color-mix(in srgb, var(--err) 9%, transparent); }
+.tag { display: inline-block; font: 600 11px/18px var(--f-code); padding: 0 7px; border-radius: 9px; border: 1px solid var(--line-2); color: var(--muted); white-space: nowrap; }
+.tag.yes { border-color: var(--accent); color: var(--accent); }
+.tag.no { border-color: var(--err); color: var(--err); }
+/* the pipeline figure */
+.pipe { display: grid; grid-template-columns: repeat(4, minmax(170px, 1fr)); gap: 10px; min-width: 720px; }
+.stage { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px; display: grid; gap: 6px; align-content: start; }
+.stage .k { font: 600 11px/14px var(--f-code); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.stage .t { font: 800 20px/1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; }
+.stage ul { padding-left: 16px; margin: 0; font-size: 13px; line-height: 19px; }
+.stage .inv { font-size: 12.5px; line-height: 18px; color: var(--accent); border-top: 1px dashed var(--line-2); padding-top: 6px; }
+.stage.hot { border-color: var(--accent); }
+.arrowrow { display: grid; grid-template-columns: repeat(4, minmax(170px, 1fr)); gap: 10px; min-width: 720px; font: 12px/16px var(--f-code); color: var(--muted); }
+.arrowrow div { text-align: center; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 6px 0; }
+dt { font-weight: 600; }
+dd { margin: 0; }
+@media (max-width: 560px) { dl { grid-template-columns: 1fr; } dt { margin-top: 6px; } h1 { font-size: 32px; } }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="meta">design/rock-planes · 27 Nov 2026 · measured on this Mac, Node, seed as named</div>
+  <h1>Cliffs from Scratch</h1>
+  <p class="lede">If the Cliffs from Spines engine were written again, knowing everything 288 rounds taught: what each stage should own, what it may promise the next, and how to make holes and overhang impossible by construction instead of chased. The look stays; pixel identity does not.</p>
+</header>
+
+<section>
+  <h2>The short answer</h2>
+  <div class="rec">
+    <h3>Recommendation</h3>
+    <p>Your four stages are right, with one change of order inside the third and one change of kind in the fourth.</p>
+    <ol>
+      <li><b>Envelope</b>, as now.</li>
+      <li><b>Masses</b>: spines, every cell, then the masses <i>settled</i> (each bottom lowered onto the masses under it) and one <b>contact graph</b> (who touches, holds, overlaps whom, with the contact polygons). Nothing later adds a neighbour.</li>
+      <li><b>Stones</b>, bottom-up, each finished before anything above it is looked at: support from the finished stones under it, then every flat cut (bevels, facets, round, weathering), each a plane that faces down no more than 55&deg;. No stone above exists yet, so there is nothing to keep for it: the keeps, guards and top-down carve go.</li>
+      <li><b>Surface</b>: flaking and cracks as <i>depth fields</i> applied to one closed mesh per stone, moving its vertices and splitting its edges, never cutting it. A hole cannot happen because the mesh's topology never opens; new overhang cannot happen because every field has a slope budget and a clearance from every other stone.</li>
+    </ol>
+    <p>Expected: holes 0 by construction; flaking 68 s to about 1&ndash;3 s on Fieldstone (estimate); about 3.5 million triangles to about half a million; roughly 700 of the engine&rsquo;s 2,230 lines gone. Do a one-day spike of stage 4 on Ashlar first, since it carries most of the risk and all of the speed.</p>
+  </div>
+</section>
+
+<section>
+  <h2>What the code does today</h2>
+  <p>Measured on the current page (version 192), seed as named, flake 0.5&ndash;1 where flaking is on. Times are milliseconds.</p>
+  <div class="scroll box">
+  <table>
+    <thead><tr><th>Wall</th><th>Masses + holding</th><th>Carve</th><th>Cracks</th><th>Flaking</th><th>Triangles</th></tr></thead>
+    <tbody>
+      <tr><td>Granite 1</td><td class="n">21</td><td class="n">12</td><td class="n">440</td><td class="n">4,249</td><td class="n">386k</td></tr>
+      <tr class="hot"><td>Fieldstone 0</td><td class="n">334</td><td class="n">139</td><td class="n">0</td><td class="n">68,214</td><td class="n">3,477k</td></tr>
+      <tr><td>Layered 0</td><td class="n">146</td><td class="n">48</td><td class="n">90</td><td class="n">43,585</td><td class="n">2,250k</td></tr>
+      <tr><td>Ashlar 1</td><td class="n">24</td><td class="n">14</td><td class="n">482</td><td class="n">5,723</td><td class="n">610k</td></tr>
+      <tr><td>Columns 0</td><td class="n">7</td><td class="n">8</td><td class="n">114</td><td class="n">4,429</td><td class="n">612k</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Everything but flaking takes under half a second on every wall. Flaking is 99% of the time on Fieldstone, and it is slow because of how it meshes, not how much: it evaluated the depth of a face 92 million times, asked whether a point is outside the stone 26 million times, and asked whether a point is covered by another stone 12 million times, about 54 depth evaluations for each vertex it kept.</p>
+
+  <h3>Where the complexity sits</h3>
+  <dl>
+    <dt>Holding, then carving the other way</dt>
+    <dd>Stones are <i>held</i> bottom-up (each finds what holds it among those placed before), but <i>carved</i> top-down, so that a stone&rsquo;s top keeps flat what the carved stone above still needs. Between the two passes sit keeps, guards, the attempt statuses (bevel, pushed, taper, guard, down, bite), the joint drawback for a stone that spans a joint, and the bevel cap beside a flare. Most of the last five rounds of bevel fixes were fixes to this seam.</dd>
+    <dt>Flaking as a formula, meshed face by face</dt>
+    <dd>The flaked stone is &ldquo;under every face&rsquo;s plane pushed in by its field&rdquo;, and each face is meshed on its own lattice, finding where another face takes over by bisection. Two faces meet along one curve but each draws it with its own chords, so slivers open along seams and at corners: the holes. Each round closed one class (corner cells, bevel tips, pushed-out bevels) and the cost grew.</dd>
+    <dt>Rules that exist to undo other rules</dt>
+    <dd>Flaking carries about a dozen exceptions: covered faces, the face-to-face tie, the rest rule, the parallel-face exception, narrow faces, leaning faces made shallower, faces with no headroom flat, up-facing bevels pushed out, the climb no steeper than 60&deg;, the corner bend, the finer lattice on bevels. Nearly all of them stop a scoop from baring something it should not; they are one rule, &ldquo;never dig past another stone&rsquo;s surface or into what holds&rdquo;, stated many times.</dd>
+    <dt>Cracks as polygon surgery</dt>
+    <dd>About 630 lines walk traces, cut each face into the convex pieces outside the grooves, and merge them back. Flaking then has to read the cracks&rsquo; cutters as more planes.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Your proposal, checked against the code</h2>
+  <div class="box">
+  <dl>
+    <dt>Envelope first <span class="tag yes">holds</span></dt>
+    <dd>It reads nothing else and nothing reaches back into it.</dd>
+    <dt>All masses, then adjacency <span class="tag yes">holds</span></dt>
+    <dd>Already nearly true: every cell is known before any stone is carved. What breaks it today is that bottoms are lowered inside the holding chain, against stones that may already be cut. Lowering is a mass-level act (it measures against tops and moves a plane), so it can be done on the masses, in the same bottom-up order, before any carving. Carving and support only ever remove material or lower a bottom into a known neighbour, so the contact graph made from the settled masses is a superset of every later contact: later stages ask it and never search.</dd>
+    <dt>Bevel and facet together, support worked out there <span class="tag yes">holds, one change of order</span></dt>
+    <dd>Right that support belongs with the cuts that chop edges, since they decide what a stone above can stand on. The change: go bottom-up, and inside each stone do support <i>first</i>, then the cuts. Support reads only the finished stones under the stone, which exist. The cuts are planes facing down no more than 55&deg;, so none can make the stone less printable, and the flare&rsquo;s own new edges get bevelled with the rest. Cutting first and supporting after also works but leaves the flare&rsquo;s edges sharp and lets a flare cut through a bevel. Either way, a stone above that now rests on a bevelled top simply rests on what is there: its own flare and bottom bevel make the upper side of the groove, which is the 45&deg;-over-45&deg; joint you already called fine.</dd>
+    <dt>Scoops, weathering and cracks never affect support <span class="tag yes">holds for scoops and cracks</span></dt>
+    <dd>It can be guaranteed, if these become fields with two limits (a slope budget per face, and a clearance from every other stone) instead of cuts. Weathering is the exception worth a decision: today it is convex rounding made of planes, which is shape, not surface, and is cheap and already printable by construction in the stone stage. I would keep it there (below).</dd>
+  </dl>
+  </div>
+</section>
+
+<section>
+  <h2>The pipeline, rewritten</h2>
+  <div class="scroll">
+    <div class="pipe">
+      <div class="stage"><div class="k">Stage 1</div><div class="t">Envelope</div>
+        <ul><li>crisp and fuzzy faces</li><li>smooth fields for Height, Depth, Length</li></ul>
+        <div class="inv">Promise: the space stones may fill.</div></div>
+      <div class="stage"><div class="k">Stage 2</div><div class="t">Masses</div>
+        <ul><li>layers, spines, cells</li><li>Fuse, slivers, bodies</li><li>settle: bottoms lowered onto masses under them, bottom-up</li><li>contact graph: pairs, contact polygons, holds / beside / overlaps, placing order</li></ul>
+        <div class="inv">Promise: no stage after adds a neighbour or moves a stone.</div></div>
+      <div class="stage"><div class="k">Stage 3</div><div class="t">Stones</div>
+        <ul><li>bottom-up, one stone at a time</li><li>held places from finished stones under it; flare</li><li>bevels, facets, round, weathering: planes, none facing down past 55&deg;</li><li>convex, one shell</li></ul>
+        <div class="inv">Promise: every stone convex, held, printable; finished before any stone above.</div></div>
+      <div class="stage hot"><div class="k">Stage 4</div><div class="t">Surface</div>
+        <ul><li>each stone remeshed once, closed</li><li>flaking and cracks as depth fields, clamped</li><li>vertices moved onto the surface; edges split where it creases</li></ul>
+        <div class="inv">Promise: closed meshes; no new face past the target; nothing under another stone bared.</div></div>
+    </div>
+  </div>
+  <p>The overhang pass stays as it is, after display, as the independent check of all four promises: it measures, it never generates.</p>
+</section>
+
+<section>
+  <h2>Stage 4, in more detail</h2>
+  <p>This is where the holes and the time are, so it gets the most care.</p>
+  <h3>One closed mesh, never cut</h3>
+  <p>Each finished stone is a convex polytope. Triangulate each face and split long edges by halving, with every new midpoint kept in one table by its edge, so two faces that share an edge share every point on it. That mesh is closed when it is made, and the only later change to its topology is the same halving, so it stays closed: there is no step at which a seam can open.</p>
+  <h3>The fields</h3>
+  <p>Each face has a depth: the deepest of its scoops (the same lattice of paraboloids keyed by the face&rsquo;s normal, so faces facing one way stay in step) and of its cracks&rsquo; V grooves (a groove is a depth that falls off the trace at the walls&rsquo; angles; a free end tapers by making it shallower). Bevels take no scoops of their own. Three limits apply to every depth:</p>
+  <ol>
+    <li><b>Slope budget.</b> A face facing down at angle &alpha; may tilt no more than 65&deg; &minus; &alpha; (rock is free in the 55&ndash;65&deg; band), so no new surface faces down past the target. This replaces the leaning-face and no-headroom rules.</li>
+    <li><b>Clearance.</b> A depth never reaches past another stone&rsquo;s surface: along the face&rsquo;s inward normal, it stops where it would cross into or out of a neighbour from the contact graph; and where a neighbour lies within the hold distance in front of the face, it is 0. One ray against a few convex neighbours per vertex. This one rule replaces covered faces, the face-to-face tie, the rest rule and its parallel exception, and the pocket at joints. It allows a scoop to bare air and never another stone.</li>
+    <li><b>Thickness.</b> A depth is at most half the stone&rsquo;s own thickness along the normal, so a thin slab is never scooped through from both sides.</li>
+  </ol>
+  <p>Each limit is a clamp, so the clamped field is then limited in slope across the face once (a two-pass distance on the face&rsquo;s lattice), which replaces the climb no steeper than 60&deg;.</p>
+  <h3>Placing the vertices</h3>
+  <p>A vertex on one face moves in along the normal by the depth. A vertex on an edge or a corner moves to where the displaced surfaces of its two or three faces meet (a 2&times;2 or 3&times;3 solve). Then each vertex is checked against its stone&rsquo;s other displaced faces, and moved onto any it lies outside: that is how a scoop running off an edge chips it, the same &ldquo;under every face pushed in&rdquo; formula as today, sampled at points the mesh already has instead of meshed afresh.</p>
+  <h3>Sharp where it should be</h3>
+  <p>A ridge between two scoops, a crack&rsquo;s bottom line and a chip&rsquo;s edge are creases. Where an edge&rsquo;s two ends are governed by different terms (two scoops, a scoop and a crack, a face and its neighbour), the edge is halved, the new point found on the crease by bisection along the edge, and the halving repeated a few levels. Halving keeps the mesh closed, and points land on the creases, so they stay sharp.</p>
+  <h3>Cost</h3>
+  <p>About one depth evaluation, a handful of neighbour planes and one clamp per vertex, against 54 depth evaluations per vertex today; vertices only as dense as the free surface needs (faces wholly inside another stone stay coarse). Estimate: Fieldstone at 0.5&ndash;1 mm in 1&ndash;3 s with about half a million triangles. The spike measures it.</p>
+</section>
+
+<section>
+  <h2>Options</h2>
+  <div class="scroll box">
+  <table>
+    <thead><tr><th>Option</th><th>What it is</th><th>For</th><th>Against</th></tr></thead>
+    <tbody>
+      <tr><td><b>A. Keep, patch</b></td><td>Today&rsquo;s pipeline, closing hole classes as found</td><td>No rewrite; the look is known</td><td>Each fix has cost speed (46 &rarr; 70 s this week) and the holes keep coming back in new places; the top-down carve keeps the keeps</td></tr>
+      <tr><td><b>B. Four stages, fields on a closed mesh</b> <span class="tag yes">recommended</span></td><td>Above</td><td>Holes impossible by construction; one rule instead of a dozen; 20&ndash;60&times; faster flaking (e); cracks become a field and their 630 lines go; keeps and guards go</td><td>Chips and ridges are found by crease splitting rather than cut exactly, so a close-up may differ slightly; a vertex projected onto a neighbour face can make thin slivers where a face is eaten whole (no hole, but checked for folds)</td></tr>
+      <tr><td><b>C. Exact pieces</b></td><td>Scoops on a face share one shape and turn, so their ridges are straight lines (a power diagram); each face becomes exact polygons on paraboloids, meshed with shared edge points</td><td>Exact, crisp ridges, closed</td><td>Meshing curved edges between faces exactly is the hard part and is most of today&rsquo;s trouble again; scars on a face all turn the same way</td></tr>
+      <tr><td><b>D. One field for the wall</b></td><td>Every stone, scoop and crack as one signed distance; dual contouring makes one mesh of the union</td><td>One watertight union by construction; the slicer gets one solid</td><td>Fine voxels over a 70 mm wall are heavy in the browser; sharp bevels need careful contouring; the stone-as-object model (pages, tapping a stone) gets harder. The SDF join was dropped on 20 Nov for similar reasons</td></tr>
+      <tr><td><b>E. Skin wall or stone library</b></td><td>From the speed page: a skin of cells extruded through the wall, or copies of 100&ndash;200 precomputed stones</td><td>Milliseconds; held by construction</td><td>Prototyped: reads as cobbles or rubble, not today&rsquo;s stones; a different look, not a rewrite of this one</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>What goes, what stays</h2>
+  <div class="scroll box">
+  <table>
+    <thead><tr><th>Part</th><th>Lines now</th><th>In the rewrite</th></tr></thead>
+    <tbody>
+      <tr><td>Envelope, layers, spines, cells, Fuse</td><td class="n">~330</td><td>Stays</td></tr>
+      <tr><td>Holding chain (lowering, held places, flare, dead pieces)</td><td class="n">~170</td><td>Lowering moves to stage 2 on masses; held places and flare stay, in stage 3</td></tr>
+      <tr><td>Keeps, guards, top-down carve, attempt statuses, joint drawback, flare cap</td><td class="n">~250</td><td>Goes: no stone above exists when a stone is cut</td></tr>
+      <tr><td>Carve kernel, bevels, facets, round, weathering</td><td class="n">~580</td><td>Stays, simpler (no guards to place against)</td></tr>
+      <tr><td>Cracks: network</td><td class="n">~120</td><td>Stays</td></tr>
+      <tr><td>Cracks: trace walking, face cutting, merging, rebuild</td><td class="n">~510</td><td>Goes: a crack is a depth field in stage 4 (about 100 lines)</td></tr>
+      <tr><td>Flaking</td><td class="n">274 (dense)</td><td>Rewritten as stage 4 (about 250 lines, plain)</td></tr>
+      <tr><td>Overhang pass</td><td class="n">105</td><td>Stays, as the check</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Line counts are from the current file; the rewrite&rsquo;s are estimates.</p>
+</section>
+
+<section>
+  <h2>Decisions for you</h2>
+  <dl>
+    <dt>Support before cuts?</dt>
+    <dd>Recommend support first, then bevels and facets (flare edges get bevelled; no flare cuts a bevel). Your order works too.</dd>
+    <dt>Weathering</dt>
+    <dd>Recommend it stays a convex rounding of planes in stage 3, with the bevels: it chops edges, which is shape. The alternative is a depth field in stage 4, which would round only seen edges and could be finer, but must then obey the same clamps.</dd>
+    <dt>Groove at horizontal joints</dt>
+    <dd>Bottom-up, a stone above stands on a bevelled top, so its underside at the front is its flare: a 55&deg; face over the 45&deg; bevel. Recommend the flare at 45&deg; for the stone&rsquo;s own front so the groove reads symmetric; or keep 55&deg; for more stone.</dd>
+    <dt>Exactness of chips and ridges</dt>
+    <dd>Option B finds them by splitting; close-ups may be a hair softer than today&rsquo;s exact cuts. Option C is exact and much harder. Recommend B and judge by render.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Risks</h2>
+  <ul>
+    <li><b>Small resting places.</b> The footprint-band prototype (23 Nov) found Fieldstone stones resting on 1&ndash;2 mm footprints, which an 0.8 mm band left with nothing. Bottom-up, only <i>seen</i> edges are bevelled (seen judged against the settled masses, so a top under a stone above is not seen), and lowering is done on masses, so a stone above does not lose its footprint to a bevel it cannot see. Watch Fieldstone&rsquo;s count of stones resting nowhere.</li>
+    <li><b>Folds.</b> Where a scoop eats a narrow face whole, its vertices land on the neighbour face; the mesh stays closed but can fold. The thickness clamp limits it; the checks count flipped triangles.</li>
+    <li><b>Estimates.</b> The stage 4 speed and triangle numbers are estimates until the spike.</li>
+    <li><b>The chain.</b> Stage 3 is bottom-up, 49 levels on Fieldstone. It is about half a second today and stays so; stones in one level are independent if it ever needs threads.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Plan</h2>
+  <ol>
+    <li><b>Spike stage 4</b> on Ashlar 1 off the page: remesh, fields, clamps, placement, crease splitting. Measure time, triangles, holes (the per-stone ray check must read 0), red, and render beside today. A day.</li>
+    <li><b>Stage 2</b>: lowering on masses and the contact graph; holding reads them.</li>
+    <li><b>Stage 3</b>: bottom-up stones; delete keeps, guards and the top-down carve.</li>
+    <li><b>Stage 4</b> in the page, replacing flaking.</li>
+    <li><b>Cracks</b> into stage 4; delete the crack surgery.</li>
+    <li>The page&rsquo;s prose rewritten for the current pipeline only, with the new times.</li>
+  </ol>
+  <p>Each step passes the seven-wall check (red, holes, time) and a render at your camera before the next.</p>
+</section>
+
+<section>
+  <h2>Language check</h2>
+  <div class="box">
+    <ul>
+      <li><b>Words:</b> no control is added, renamed or removed; Bevel, Facet, Round, Weathering, Flaking and Cracks keep their meaning. The prose names the stages Envelope, Masses, Stones and Surface; &ldquo;mass&rdquo; is already the Structure view&rsquo;s word.</li>
+      <li><b>Kinds:</b> none added. A depth field is internal.</li>
+      <li><b>Second paths:</b> removes one: support is decided once (stage 3), where today it is decided by holding and again by keeps during the carve, and scoops&rsquo; limits are one clamp instead of a dozen rules.</li>
+      <li><b>Holes in the table:</b> none opened.</li>
+    </ul>
+  </div>
+</section>
+</div>
