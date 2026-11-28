@@ -2109,7 +2109,7 @@ function surfaceWall(w, seed) {
     const F0 = st.faces.filter(f => f.v.length >= 3), B = bodies[si], nb = near(B.l, B.h, OFF + 2 * Math.max(FLAKE.hi, 0) + 0.05, si);
     // the stone's planes (faces on one plane share it), its corners welded, its faces as loops of them, each anticlockwise seen from outside
     const PL = []; const planeOf = f => { const b = dot(f.n, f.v[0]); for (let k = 0; k < PL.length; k++) if (dot(PL[k].n, f.n) > 1 - 1e-9 && Math.abs(PL[k].b - b) < 1e-6) return k; PL.push({ n: f.n, b, kind: f.kind }); return PL.length - 1; };
-    const P = [], vmap = new Map(), vid = p => { const k = Math.round(p[0] * 2e4) + ',' + Math.round(p[1] * 2e4) + ',' + Math.round(p[2] * 2e4); let i = vmap.get(k); if (i === undefined) { i = P.length; P.push(p.slice()); vmap.set(k, i); } return i; };
+    const P = [], vmap = new Map(), vid = p => { const k = (Math.round(p[0] * 2e4) + 4194304) * 8388608 + Math.round(p[1] * 2e4) + 4194304, c = Math.round(p[2] * 2e4); let m = vmap.get(k); if (m === undefined) vmap.set(k, m = new Map()); let i = m.get(c); if (i === undefined) { i = P.length; P.push(p.slice()); m.set(c, i); } return i; };
     const loops = [], seenLoop = new Set(); for (const f of F0) { const k = planeOf(f), ids = []; for (const v of f.v) { const i = vid(v); if (ids[ids.length - 1] !== i) ids.push(i); } if (ids.length > 1 && ids[0] === ids[ids.length - 1]) ids.pop(); if (ids.length >= 3) { const key = [...ids].sort((x, y) => x - y).join(','); if (!seenLoop.has(key)) { seenLoop.add(key); loops.push([k, ids]); } } }
     const SP = P.map(p => { const o = []; for (let k = 0; k < PL.length; k++) if (Math.abs(dot(PL[k].n, p) - PL[k].b) < 2e-5) o.push(k); return o; }), onPl = PL.map(() => []); SP.forEach((L, i) => { for (const k of L) onPl[k].push(i); });
     /* a corner of one face on another's edge goes into that edge too: an edge of face k beside face m can hold only corners on both planes */
@@ -2136,7 +2136,8 @@ function surfaceWall(w, seed) {
           /* fitted to its room: walking out from E over the face each way its mouth reaches (across the face, either way along the edge; a pit's all
              round), where another stone rises over the face (just off it, a point lies in one) the scar is made smaller (all its sizes alike), so its
              mouth ends short of it; a narrow face (a bevel under a stone) is flaked from its free edge with scars as small as it holds */
-          { const up = mul(n, 2 * OFF), over = x => { const y = add(x, up); return nb.some(j => inside(j, y, 0)); }, ways = [[t, 0.85 * Lf], [dir, 0.8 * W2], [mul(dir, -1), 0.8 * W2]]; if (pit) ways.push([mul(t, -1), 0.85 * Lf]);
+          { const R_ = Math.max(Lf, W2) + 3 * OFF, nbE = []; for (const j of nb) { const B_ = bodies[j]; if (B_.l[0] <= E[0] + R_ && B_.h[0] >= E[0] - R_ && B_.l[1] <= E[1] + R_ && B_.h[1] >= E[1] - R_ && B_.l[2] <= E[2] + R_ && B_.h[2] >= E[2] - R_) nbE.push(j); }   /* only the stones within its reach can stand in its way */
+            const up = mul(n, 2 * OFF), over = x => { const y = add(x, up); for (let q2 = 0; q2 < nbE.length; q2++) if (inside(nbE[q2], y, 0)) return true; return false; }, ways = [[t, 0.85 * Lf], [dir, 0.8 * W2], [mul(dir, -1), 0.8 * W2]]; if (pit) ways.push([mul(t, -1), 0.85 * Lf]);
             let f = 1; for (const [w_, L_] of ways) { if (!over(add(E, mul(w_, L_)))) continue; const st_ = Math.max(0.05, L_ / 16); let room = 0;
               for (let s_ = st_; s_ < L_; s_ += st_) { if (over(add(E, mul(w_, s_)))) break; room = s_; } f = Math.min(f, room / L_); }
             if (f < 1) { if (d * f < FLAKE.least) return null; d *= f; W2 *= f; Lf *= f; Lb *= f; } }
@@ -2163,8 +2164,10 @@ function surfaceWall(w, seed) {
           const Bp = sq.map(x => add(Ec, add(mul(dir, x[0]), mul(t, x[1])))); let cw = [0, 0, 0]; for (let j = 0; j < Bp.length; j++) cw = add(cw, cross(Bp[j], Bp[(j + 1) % Bp.length])); const flip = dot(cw, n) < 0;
           /* a stone that rises over its mouth holds it (its cap, where the mouth opens just off the face, lies in that stone): asked first, of the mouth
              alone, before the cutter is made */
-          { const cl = [Q[0], Q[1], Q[2]], ch = [Q[0], Q[1], Q[2]]; for (const v of Bp) for (let q2 = 0; q2 < 3; q2++) { if (v[q2] < cl[q2]) cl[q2] = v[q2]; if (v[q2] > ch[q2]) ch[q2] = v[q2]; }
-            for (const j of near(cl, ch, OFF, si)) { const Bj = bodies[j]; if (Bj.l[0] > ch[0] || Bj.h[0] < cl[0] || Bj.l[1] > ch[1] || Bj.h[1] < cl[1] || Bj.l[2] > ch[2] || Bj.h[2] < cl[2]) continue;
+          let reachL; { const cl = [Q[0], Q[1], Q[2]], ch = [Q[0], Q[1], Q[2]]; for (const v of Bp) for (let q2 = 0; q2 < 3; q2++) { if (v[q2] < cl[q2]) cl[q2] = v[q2]; if (v[q2] > ch[q2]) ch[q2] = v[q2]; }
+            reachL = [...near(cl, ch, OFF, si)];
+            for (const j of reachL) { const Bj = bodies[j]; if (Bj.l[0] > ch[0] || Bj.h[0] < cl[0] || Bj.l[1] > ch[1] || Bj.h[1] < cl[1] || Bj.l[2] > ch[2] || Bj.h[2] < cl[2]) continue;
+              { let apart = false; for (let q2 = 0; q2 < Bj.pl.length && !apart; q2 += 4) { const a_ = Bj.pl[q2], b_ = Bj.pl[q2 + 1], c_ = Bj.pl[q2 + 2], d_ = Bj.pl[q2 + 3]; let all = true; for (let q3 = 0; q3 < Bp.length; q3++) { const v = Bp[q3]; if (a_ * v[0] + b_ * v[1] + c_ * v[2] <= d_) { all = false; break; } } if (all) apart = true; } if (apart) continue; }
               let cap = Bp; for (let q2 = 0; q2 < Bj.pl.length && cap.length >= 3; q2 += 4) cap = clipConvex(cap, [Bj.pl[q2], Bj.pl[q2 + 1], Bj.pl[q2 + 2]], Bj.pl[q2 + 3]); if (cap.length >= 3 && polyArea(cap) > 1e-9) return null; } }
           let poly = [{ n, b: planes[0].b, role: 'cut', verts: flip ? Bp.slice().reverse() : Bp }];
           for (let j = 0; j < Bp.length; j++) { const pl = planes[sq[j][2]], v3 = [Q, Bp[(j + 1) % Bp.length], Bp[j]]; if (dot(cross(sub(v3[1], Q), sub(v3[2], Q)), pl.n) < 0) v3.reverse(); poly.push({ n: pl.n, b: pl.b, role: 'cut', verts: v3 }); }
@@ -2186,7 +2189,7 @@ function surfaceWall(w, seed) {
              covering the face, which the cut would leave a roof) holds it, and it is not made; any other the cone reaches is chipped by it too (so a seam or an overlap is chipped
              like open face), unless the cut there comes within OFF of the plate, or its point lies on that stone's face */
           const others = []; { let cl = [Q[0], Q[1], Q[2]], ch = [Q[0], Q[1], Q[2]]; for (const v of Bp) for (let q2 = 0; q2 < 3; q2++) { cl[q2] = Math.min(cl[q2], v[q2]); ch[q2] = Math.max(ch[q2], v[q2]); }
-            for (const j of near(cl, ch, OFF, si)) { const Bj = bodies[j]; let ov = true; for (let q2 = 0; q2 < 3; q2++) if (Bj.l[q2] > ch[q2] + OFF || Bj.h[q2] < cl[q2] - OFF) ov = false; if (!ov) continue;
+            for (const j of reachL) { const Bj = bodies[j]; let ov = true; for (let q2 = 0; q2 < 3; q2++) if (Bj.l[q2] > ch[q2] + OFF || Bj.h[q2] < cl[q2] - OFF) ov = false; if (!ov) continue;
               /* a stone with a face the whole cone lies beyond is not reached: found from the cone's corners, before any cutting */
               { let apart = false; for (let q2 = 0; q2 < Bj.pl.length && !apart; q2 += 4) { const a_ = Bj.pl[q2], b_ = Bj.pl[q2 + 1], c_ = Bj.pl[q2 + 2], d_ = Bj.pl[q2 + 3] + OFF; if (a_ * Q[0] + b_ * Q[1] + c_ * Q[2] <= d_) continue; let all = true; for (let q3 = 0; q3 < Bp.length; q3++) { const v = Bp[q3]; if (a_ * v[0] + b_ * v[1] + c_ * v[2] <= d_) { all = false; break; } } if (all) apart = true; } if (apart) continue; }
               let pj = cone; for (let q2 = 0; q2 < Bj.pl.length && pj.length; q2 += 4) pj = cutSolid(pj, { n: [Bj.pl[q2], Bj.pl[q2 + 1], Bj.pl[q2 + 2]], b: Bj.pl[q2 + 3] + OFF }); if (!pj.length) continue;
@@ -2227,12 +2230,13 @@ function surfaceWall(w, seed) {
       for (const C of foreign[si]) sgAdd(C);
       const dM = (FLAKE.lo + FLAKE.hi) / 2, gS = Math.max(0.25, FLAKE.cover * dM), inCut = p => { const L_ = sgrid.get(sgk(Math.floor(p[0] / SG), Math.floor(p[1] / SG), Math.floor(p[2] / SG))); if (L_) for (const C of L_) { if ( p[0] < C.lo[0] - 1e-6 || p[0] > C.hi[0] + 1e-6 || p[1] < C.lo[1] - 1e-6 || p[1] > C.hi[1] + 1e-6 || p[2] < C.lo[2] - 1e-6 || p[2] > C.hi[2] + 1e-6) continue;
           let ins = true; for (const h of C.planes) if (dot(h.n, p) > h.b + 1e-6) { ins = false; break; } if (ins) return true; } return false; };
-      loops.forEach(([k, ids], li) => { const n = PL[k].n; if (n[2] < -SIN_T + 1e-6) return; const e1 = unit(Math.abs(n[0]) < 0.9 ? cross(n, [1, 0, 0]) : cross(n, [0, 1, 0])), e2 = cross(n, e1), o = P[ids[0]];
+      loops.forEach(([k, ids], li) => { const n = PL[k].n; if (n[2] < -SIN_T + 1e-6) return; const fl_ = [1e9, 1e9, 1e9], fh_ = [-1e9, -1e9, -1e9]; for (const i of ids) for (let q = 0; q < 3; q++) { if (P[i][q] < fl_[q]) fl_[q] = P[i][q]; if (P[i][q] > fh_[q]) fh_[q] = P[i][q]; }
+        const nbF = nb.filter(j => { const B_ = bodies[j]; return B_.l[0] <= fh_[0] + 1 && B_.h[0] >= fl_[0] - 1 && B_.l[1] <= fh_[1] + 1 && B_.h[1] >= fl_[1] - 1 && B_.l[2] <= fh_[2] + 1 && B_.h[2] >= fl_[2] - 1; });   /* the stones whose boxes reach this face */ const e1 = unit(Math.abs(n[0]) < 0.9 ? cross(n, [1, 0, 0]) : cross(n, [0, 1, 0])), e2 = cross(n, e1), o = P[ids[0]];
         const uv = ids.map(i => [dot(sub(P[i], o), e1), dot(sub(P[i], o), e2)]); let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity; for (const [u, v] of uv) { u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
         const inPoly2 = (u, v) => { for (let q = 0; q < uv.length; q++) { const a = uv[q], b = uv[(q + 1) % uv.length], c = (b[0] - a[0]) * (v - a[1]) - (b[1] - a[1]) * (u - a[0]), l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (c < 0.1 * l) return false; } return true; };
         const r0 = j => rnd(si, 77713, li, j), su = r0(0) * gS, sv = r0(1) * gS;
         for (let u = u0 + su; u <= u1; u += gS) for (let v = v0 + sv; v <= v1; v += gS) { if (!inPoly2(u, v)) continue; const p = add(o, add(mul(e1, u), mul(e2, v))); if (inCut(p)) continue; { const R_ = FLAKE.room; if (inCut(add(p, mul(e1, R_))) || inCut(sub(p, mul(e1, R_))) || inCut(add(p, mul(e2, R_))) || inCut(sub(p, mul(e2, R_)))) continue; }   /* a pit where a patch is bare, not at a scar's edge */
-          const q = add(p, mul(n, 2 * OFF)); if (q[2] < OFF) continue; let hid = false; for (const j of nb) if (inside(j, q, 0)) { hid = true; break; } if (hid) continue;
+          const q = add(p, mul(n, 2 * OFF)); if (q[2] < OFF) continue; let hid = false; for (const j of nbF) if (inside(j, q, 0)) { hid = true; break; } if (hid) continue;
           nTried++; const r = j => rnd(si, 77717, li, Math.round(u * 1000), Math.round(v * 1000), j), a = TWO_PI * r(50), dir = add(mul(e1, Math.cos(a)), mul(e2, Math.sin(a)));
           { const C = strike(p, dir, k, [0, 0, 0], r, FLAKE.pit, null, true); if (C) { keepScar(C); nScars++; nPits++; } } } });
     }
@@ -2299,8 +2303,9 @@ function surfaceWall(w, seed) {
         { const CP = C.planes; let sep = false;   /* first, cheaply: a plane of the cutter the whole face lies beyond */
           for (let q = 0; q < CP.length && !sep; q++) { const n_ = CP[q].n, b_ = CP[q].b + 1e-6; let all = true; for (let w = 0; w < basePts.length; w++) { const p_ = basePts[w]; if (n_[0] * p_[0] + n_[1] * p_[1] + n_[2] * p_[2] <= b_) { all = false; break; } } if (all) sep = true; }
           if (sep) continue;
+          if (pieces.length > 3) {   /* (worth finding only when there are pieces to pass over) */
           let Q = basePts; for (let q = 0; q < CP.length; q++) { Q = clipConvex(Q, CP[q].n, CP[q].b + 1e-6); if (Q.length < 3) break; } if (Q.length < 3) continue;
-          const l = [1e9, 1e9, 1e9], h_ = [-1e9, -1e9, -1e9]; for (let q = 0; q < Q.length; q++) { const v = Q[q]; for (let j = 0; j < 3; j++) { if (v[j] < l[j]) l[j] = v[j]; if (v[j] > h_[j]) h_[j] = v[j]; } } cb = [l, h_]; }
+          const l = [1e9, 1e9, 1e9], h_ = [-1e9, -1e9, -1e9]; for (let q = 0; q < Q.length; q++) { const v = Q[q]; for (let j = 0; j < 3; j++) { if (v[j] < l[j]) l[j] = v[j]; if (v[j] > h_[j]) h_[j] = v[j]; } } cb = [l, h_]; } }
         for (let np = 0; np < pieces.length; np++) { const pc = pieces[np]; if (!meets(cb, pc.bb || (pc.bb = boxOf(pc.v)))) { next.push(pc); continue; } let clear = false; const pv = pc.v;
           for (let q = 0; q < npl && !clear; q++) { const g = pl[q][0], sg = pl[q][1]; if (g === f) continue; let all = true; for (let w = 0; w < pv.length; w++) if (dist(g, sg, V[pv[w]]) < EPS) { all = false; break; } if (all) clear = true; }
           if (clear) { next.push(pc); continue; }
@@ -2382,7 +2387,11 @@ function surfaceWall(w, seed) {
       for (const [k, reg] of lineVerts) { const r = lfind(k); if (r === k) continue; const R = lineVerts.get(r); for (const id of reg.keys()) if (!R.has(id)) R.set(id, 0); } }
     })();
     const lineSorted = new Map(); for (const [k, reg] of lineVerts) { if (lfind(k) !== k) continue; const f_ = Math.floor(k / 1048576), g_ = k % 1048576, d = cross(PN[f_], PN[g_]); const a = [...reg.keys()].map(id => [id, dot(V[id], d)]).sort((x, y) => x[1] - y[1]); lineSorted.set(k, { id: a.map(x => x[0]), at: new Map(a.map((x, i) => [x[0], i])) }); }
-    FAC.forEach((F, fi) => { const N = F.N, e1 = unit(Math.abs(N[0]) < 0.9 ? cross(N, [1, 0, 0]) : cross(N, [0, 1, 0])), e2 = cross(N, e1), nx = new Map();
+    FAC.forEach((F, fi) => { const N = F.N;
+      /* a face of one piece whose outline no other face's corner splits is that piece: a fan, with nothing chained or looked up */
+      if (F.pieces.length === 1) { const R = runsOf[fi], n_ = R.length; let plain = n_ >= 3; for (let q = 0; q < n_ && plain; q++) { const r = R[q]; if (r[2] < 0 || r[1] !== R[(q + 1) % n_][0]) { plain = false; break; } const S = lineSorted.get(lfind(r[2])), d_ = S.at.get(r[0]) - S.at.get(r[1]); if (d_ !== 1 && d_ !== -1) plain = false; }
+        if (plain) { for (let q = 1; q + 1 < n_; q++) { T.push(R[0][0], R[q][0], R[q + 1][0]); TK.push(F.kind); TN.push(N); } return; } }
+      const e1 = unit(Math.abs(N[0]) < 0.9 ? cross(N, [1, 0, 0]) : cross(N, [0, 1, 0])), e2 = cross(N, e1), nx = new Map();
       const addE = (a, b) => { if (a === b) return; let L = nx.get(a); if (!L) nx.set(a, L = []); L.push(b); };
       for (const [a, b, k] of runsOf[fi]) { if (k < 0) { addE(a, b); continue; } const S = lineSorted.get(lfind(k)), i = S.at.get(a), j = S.at.get(b); if (i < j) for (let x = i; x < j; x++) addE(S.id[x], S.id[x + 1]); else for (let x = i; x > j; x--) addE(S.id[x], S.id[x - 1]); }
       const U = id => { const p = V[id]; return [p[0] * e1[0] + p[1] * e1[1] + p[2] * e1[2], p[0] * e2[0] + p[1] * e2[1] + p[2] * e2[2]]; }, loops = [];
