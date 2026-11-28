@@ -238,8 +238,8 @@ dd { margin: 0; }
   <h2>Risks</h2>
   <ul>
     <li><b>Small resting places.</b> The footprint-band prototype (23 Nov) found Fieldstone stones resting on 1&ndash;2 mm footprints, which an 0.8 mm band left with nothing. Bottom-up, only <i>seen</i> edges are bevelled (seen judged against the settled masses, so a top under a stone above is not seen), and lowering is done on masses, so a stone above does not lose its footprint to a bevel it cannot see. Watch Fieldstone&rsquo;s count of stones resting nowhere.</li>
-    <li><b>Folds.</b> Where a scoop eats a narrow face whole, its vertices land on the neighbour face; the mesh stays closed but can fold. The thickness clamp limits it; the checks count flipped triangles.</li>
-    <li><b>Estimates.</b> The stage 4 speed and triangle numbers are estimates until the spike.</li>
+    <li><b>Folds.</b> Where a scoop eats a narrow face whole, its vertices land on the neighbour face; the mesh stays closed but can fold. The thickness clamp limits it and the ease-back undoes any triangle that turns over or faces down past 64.5&deg;; what is left is a few mm&sup2; of hidden folds on Granite and Columns.</li>
+    <li><b>Speed.</b> Measured, stage 4 is slower than the estimate: Fieldstone&rsquo;s whole wall is 10.6 s (was 70.6), not 1&ndash;3 s for the flaking alone, and about 0.5 to 2 million triangles. Most of the time is the march into the moved surfaces and snapping points onto creases; walls with cracks pay most (Granite 1, 6.1 s to 7.9 s).</li>
     <li><b>The chain.</b> Stage 3 is bottom-up, 49 levels on Fieldstone. It is about half a second today and stays so; stones in one level are independent if it ever needs threads.</li>
   </ul>
 </section>
@@ -247,11 +247,11 @@ dd { margin: 0; }
 <section>
   <h2>Plan</h2>
   <ol>
-    <li><b>Spike stage 4</b> on Ashlar 1 off the page: remesh, the weathering, scoop and crack fields, clamps, placement, crease splitting. Measure time, triangles, holes (the per-stone ray check must read 0), red, and render beside today. A day.</li>
+    <li><b>Spike stage 4</b> on Ashlar 1 off the page: remesh, the weathering, scoop and crack fields, clamps, placement, crease splitting. Measure time, triangles, holes (the per-stone ray check must read 0), red, and render beside today. A day. <i>Done, built straight into the page (steps 4 and 5 with it).</i></li>
     <li><b>Stage 2</b>: lowering on masses and the contact graph; holding reads them.</li>
     <li><b>Stage 3</b>: bottom-up stones, one pass of flare, bevels, facets and Round; delete keeps, guards, the top-down carve and weathering&rsquo;s planes.</li>
-    <li><b>Stage 4</b> in the page, replacing flaking.</li>
-    <li><b>Cracks</b> into stage 4; delete the crack surgery.</li>
+    <li><b>Stage 4</b> in the page, replacing flaking. <i>Done: one closed mesh per stone, never cut; open edges 0 on all seven walls at both flake settings; red no worse anywhere (Fieldstone 4.35 to 1.13 mm&sup2;).</i></li>
+    <li><b>Cracks</b> into stage 4; delete the crack surgery. <i>Half done: with Flaking on, a crack is a depth like a scoop (the point moves onto the cutter&rsquo;s walls), cut into the scarred surface; the lips are ragged where the mesh is coarse. The surgery stays for Flaking at zero, and goes once stage 4 runs with no scoops too. Weathering is still planes in stage 3.</i></li>
     <li>The page&rsquo;s prose rewritten for the current pipeline only, with the new times.</li>
   </ol>
   <p>Each step passes the seven-wall check (red, holes, time) and a render at your camera before the next.</p>
