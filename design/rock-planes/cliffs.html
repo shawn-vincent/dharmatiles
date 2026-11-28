@@ -2299,7 +2299,7 @@ function surfaceWall(w, seed) {
       let pieces = [base]; const bb = boxOf(base.v);
       const basePts = base.v.map(i => V[i]), nearL = nearCutters(bb);
       /* (plain counted loops throughout: leaving a for-of early closes its iterator, a path the engine's compiler meets too rarely to keep the function fast) */
-      for (let nc = 0; nc < nearL.length && pieces.length; nc++) { const ci = nearL[nc]; if (ci === owner) continue; const C = cutters[ci]; let cb = [C.lo, C.hi]; if (!meets(cb, bb)) continue; const pl = cutPl[ci], npl = pl.length, next = [];
+      for (let nc = 0; nc < nearL.length && pieces.length; nc++) { const ci = nearL[nc]; if (ci === owner) continue; const C = cutters[ci]; let cb = [C.lo, C.hi]; if (!meets(cb, bb)) continue; const pl = cutPl[ci], npl = pl.length; let next = null;   /* the list is made again only from the first piece this cutter changes */
         /* where the cutter crosses this whole face (the face cut by the cutter's planes, as points only): nowhere, and it is passed over; else only the
            pieces that reach that place are looked at */
         { const CP = C.planes; let sep = false;   /* first, cheaply: a plane of the cutter the whole face lies beyond */
@@ -2308,13 +2308,13 @@ function surfaceWall(w, seed) {
           if (pieces.length > 3) {   /* (worth finding only when there are pieces to pass over) */
           let Q = basePts; for (let q = 0; q < CP.length; q++) { Q = clipConvex(Q, CP[q].n, CP[q].b + 1e-6); if (Q.length < 3) break; } if (Q.length < 3) continue;
           const l = [1e9, 1e9, 1e9], h_ = [-1e9, -1e9, -1e9]; for (let q = 0; q < Q.length; q++) { const v = Q[q]; for (let j = 0; j < 3; j++) { if (v[j] < l[j]) l[j] = v[j]; if (v[j] > h_[j]) h_[j] = v[j]; } } cb = [l, h_]; } }
-        for (let np = 0; np < pieces.length; np++) { const pc = pieces[np]; if (!meets(cb, pc.bb || (pc.bb = boxOf(pc.v)))) { next.push(pc); continue; } let clear = false; const pv = pc.v;
+        for (let np = 0; np < pieces.length; np++) { const pc = pieces[np]; if (!meets(cb, pc.bb || (pc.bb = boxOf(pc.v)))) { if (next) next.push(pc); continue; } let clear = false; const pv = pc.v;
           for (let q = 0; q < npl && !clear; q++) { const g = pl[q][0], sg = pl[q][1]; if (g === f) continue; const n_ = PN[g], b_ = PB[g]; let all = true; for (let w = 0; w < pv.length; w++) { const x = V[pv[w]]; if (sg * (n_[0] * x[0] + n_[1] * x[1] + n_[2] * x[2] - b_) < EPS) { all = false; break; } } if (all) clear = true; }
-          if (clear) { next.push(pc); continue; }
+          if (clear) { if (next) next.push(pc); continue; }
           /* split by the cutter's planes one by one, the part outside each kept; if what is left inside has no area the cutter only nears the piece: it stays whole */
           const outs = []; let rest = pc; for (let q = 0; q < npl; q++) { const g = pl[q][0], sg = pl[q][1]; if (g === f) continue; const sp = splitPoly(f, rest, g, sg), o = sp[0]; if (o.v.length >= 3) outs.push(o); rest = sp[1]; if (rest.v.length < 3) break; }
-          if (rest.v.length < 3 || Math.abs(areaOf(rest.v, N)) < 1e-10) next.push(pc); else for (let q = 0; q < outs.length; q++) next.push(outs[q]); }
-        pieces = next; }
+          if (rest.v.length < 3 || Math.abs(areaOf(rest.v, N)) < 1e-10) { if (next) next.push(pc); } else { if (!next) next = pieces.slice(0, np); for (let q = 0; q < outs.length; q++) next.push(outs[q]); } }
+        if (next) pieces = next; }
       FAC.push({ f, N, kind, pieces });
     };
     // the stone's faces: each loop, its edges' planes those of the faces beside it
@@ -2328,9 +2328,10 @@ function surfaceWall(w, seed) {
     cutters.forEach((C, ci) => { const cand = C.planes.map((h, i) => [h.n, h.b, cutPl[ci][i]]);
       /* an edge of a cutter's face lies on another of the cutter's planes or on a face of the stone the cutter was clipped by: only those are tried (every face of the stone, if one is not known) */
       { let all = false; const seen = new Set(); for (const F of C.poly) if (F.role === 'stone') { const sc = stoneByN.get(F.n); if (!sc) { all = true; break; } if (!seen.has(sc)) { seen.add(sc); cand.push(sc); } } if (all) { cand.length = C.planes.length; for (const sc of stoneCand) cand.push(sc); } }
-      const wid = new Map();
+      const wxs = [], wis = [];
       for (const F of C.poly) { if (F.role !== 'cut' || F.verts.length < 3) continue; const [f, sf] = pid(F.n, F.b), N = mul(F.n, -1), ids = [], e = [];
-        for (const x of F.verts) { let i = wid.get(x); if (i === undefined) wid.set(x, i = weld(x)); if (ids[ids.length - 1] !== i) ids.push(i); } if (ids.length > 1 && ids[0] === ids[ids.length - 1]) ids.pop(); if (ids.length < 3) continue;
+        for (const x of F.verts) { let i = -1; for (let q = 0; q < wxs.length; q++) { const y = wxs[q]; if (y === x || (y[0] === x[0] && y[1] === x[1] && y[2] === x[2])) { i = wis[q]; break; } }   /* a corner this cutter's other faces had already: the very same numbers */
+          if (i < 0) { i = weld(x); wxs.push(x); wis.push(i); } if (ids[ids.length - 1] !== i) ids.push(i); } if (ids.length > 1 && ids[0] === ids[ids.length - 1]) ids.pop(); if (ids.length < 3) continue;
         if (areaOf(ids, N) < 0) ids.reverse();
         for (let q = 0; q < ids.length; q++) { const a = V[ids[q]], b = V[ids[(q + 1) % ids.length]]; let lab = [-1, 0];
           { let bd = 6e-5; for (const [cn, cb, gi] of cand) { if (gi[0] === f) continue; const d_ = Math.max(Math.abs(dot(cn, a) - cb), Math.abs(dot(cn, b) - cb)); if (d_ < bd) { bd = d_; lab = gi; } } } e.push(lab); }
