@@ -88,8 +88,8 @@ dd { margin: 0; }
     <ol>
       <li><b>Envelope</b>, as now.</li>
       <li><b>Masses</b>: spines, every cell, then the masses <i>settled</i> (each bottom lowered onto the masses under it) and one <b>contact graph</b> (who touches, holds, overlaps whom, with the contact polygons). Nothing later adds a neighbour.</li>
-      <li><b>Stones</b>, bottom-up, each finished before anything above it is looked at: support from the finished stones under it, then every flat cut (bevels, facets, round, weathering), each a plane that faces down no more than 55&deg;. No stone above exists yet, so there is nothing to keep for it: the keeps, guards and top-down carve go.</li>
-      <li><b>Surface</b>: flaking and cracks as <i>depth fields</i> applied to one closed mesh per stone, moving its vertices and splitting its edges, never cutting it. A hole cannot happen because the mesh's topology never opens; new overhang cannot happen because every field has a slope budget and a clearance from every other stone.</li>
+      <li><b>Stones</b>, bottom-up, each finished before anything above it is looked at, in one pass of flat cuts chosen together: the flare that guarantees support (from the finished stones under it), the bevels, the facets and Round, each a plane that faces down no more than 55&deg;. Where a flare cuts under a bottom edge, the flare is that edge&rsquo;s bevel; no second bevel is made there. No stone above exists yet, so there is nothing to keep for it: the keeps, guards and top-down carve go.</li>
+      <li><b>Surface</b>: weathering, flaking and cracks as <i>depth fields</i> applied to one closed mesh per stone, moving its vertices and splitting its edges, never cutting it. A hole cannot happen because the mesh's topology never opens; new overhang cannot happen because every field has a slope budget and a clearance from every other stone.</li>
     </ol>
     <p>Expected: holes 0 by construction; flaking 68 s to about 1&ndash;3 s on Fieldstone (estimate); about 3.5 million triangles to about half a million; roughly 700 of the engine&rsquo;s 2,230 lines gone. Do a one-day spike of stage 4 on Ashlar first, since it carries most of the risk and all of the speed.</p>
   </div>
@@ -133,10 +133,10 @@ dd { margin: 0; }
     <dd>It reads nothing else and nothing reaches back into it.</dd>
     <dt>All masses, then adjacency <span class="tag yes">holds</span></dt>
     <dd>Already nearly true: every cell is known before any stone is carved. What breaks it today is that bottoms are lowered inside the holding chain, against stones that may already be cut. Lowering is a mass-level act (it measures against tops and moves a plane), so it can be done on the masses, in the same bottom-up order, before any carving. Carving and support only ever remove material or lower a bottom into a known neighbour, so the contact graph made from the settled masses is a superset of every later contact: later stages ask it and never search.</dd>
-    <dt>Bevel and facet together, support worked out there <span class="tag yes">holds, one change of order</span></dt>
-    <dd>Right that support belongs with the cuts that chop edges, since they decide what a stone above can stand on. The change: go bottom-up, and inside each stone do support <i>first</i>, then the cuts. Support reads only the finished stones under the stone, which exist. The cuts are planes facing down no more than 55&deg;, so none can make the stone less printable, and the flare&rsquo;s own new edges get bevelled with the rest. Cutting first and supporting after also works but leaves the flare&rsquo;s edges sharp and lets a flare cut through a bevel. Either way, a stone above that now rests on a bevelled top simply rests on what is there: its own flare and bottom bevel make the upper side of the groove, which is the 45&deg;-over-45&deg; joint you already called fine.</dd>
-    <dt>Scoops, weathering and cracks never affect support <span class="tag yes">holds for scoops and cracks</span></dt>
-    <dd>It can be guaranteed, if these become fields with two limits (a slope budget per face, and a clearance from every other stone) instead of cuts. Weathering is the exception worth a decision: today it is convex rounding made of planes, which is shape, not surface, and is cheap and already printable by construction in the stone stage. I would keep it there (below).</dd>
+    <dt>Flare, bevels and facets in one pass <span class="tag yes">holds, done bottom-up</span></dt>
+    <dd>Right that support belongs with the cuts that chop edges, since they decide what a stone above can stand on. Done bottom-up, the pass reads only the finished stones under the stone, which exist. It gathers every cut for the stone at once: the flare planes over its held places, a bevel for each seen edge, the facets, Round. Every one is a plane facing down no more than 55&deg;, so none can make the stone less printable, and since they are chosen together no cut undoes another. At a bottom edge the flare already cuts, the flare is the bevel; the bevel is made only on the bottom edges no flare reaches. A stone above that rests on a bevelled top rests on what is there: its flare makes the upper side of the groove, which is the 45&deg;-over-45&deg; joint you already called fine.</dd>
+    <dt>Weathering, scoops and cracks never affect support <span class="tag yes">holds</span></dt>
+    <dd>It can be guaranteed if all three become depth fields under the same limits (a slope budget per face, a clearance from every other stone, half the stone&rsquo;s thickness) instead of cuts. Weathering as a field rounds each seen convex edge to its arc: a vertex near the edge moves in onto the rolling ball, so it is smooth with no planes to bevel again, rounds only what is seen, and stops where the arc would face down past the target.</dd>
   </dl>
   </div>
 </section>
@@ -152,10 +152,10 @@ dd { margin: 0; }
         <ul><li>layers, spines, cells</li><li>Fuse, slivers, bodies</li><li>settle: bottoms lowered onto masses under them, bottom-up</li><li>contact graph: pairs, contact polygons, holds / beside / overlaps, placing order</li></ul>
         <div class="inv">Promise: no stage after adds a neighbour or moves a stone.</div></div>
       <div class="stage"><div class="k">Stage 3</div><div class="t">Stones</div>
-        <ul><li>bottom-up, one stone at a time</li><li>held places from finished stones under it; flare</li><li>bevels, facets, round, weathering: planes, none facing down past 55&deg;</li><li>convex, one shell</li></ul>
+        <ul><li>bottom-up, one stone at a time</li><li>held places from finished stones under it</li><li>one pass of cuts: flare, bevels, facets, Round; a flare is the bevel of the edge it cuts</li><li>planes, none facing down past 55&deg;; convex, one shell</li></ul>
         <div class="inv">Promise: every stone convex, held, printable; finished before any stone above.</div></div>
       <div class="stage hot"><div class="k">Stage 4</div><div class="t">Surface</div>
-        <ul><li>each stone remeshed once, closed</li><li>flaking and cracks as depth fields, clamped</li><li>vertices moved onto the surface; edges split where it creases</li></ul>
+        <ul><li>each stone remeshed once, closed</li><li>weathering, flaking and cracks as depth fields, clamped</li><li>vertices moved onto the surface; edges split where it creases</li></ul>
         <div class="inv">Promise: closed meshes; no new face past the target; nothing under another stone bared.</div></div>
     </div>
   </div>
@@ -168,13 +168,13 @@ dd { margin: 0; }
   <h3>One closed mesh, never cut</h3>
   <p>Each finished stone is a convex polytope. Triangulate each face and split long edges by halving, with every new midpoint kept in one table by its edge, so two faces that share an edge share every point on it. That mesh is closed when it is made, and the only later change to its topology is the same halving, so it stays closed: there is no step at which a seam can open.</p>
   <h3>The fields</h3>
-  <p>Each face has a depth: the deepest of its scoops (the same lattice of paraboloids keyed by the face&rsquo;s normal, so faces facing one way stay in step) and of its cracks&rsquo; V grooves (a groove is a depth that falls off the trace at the walls&rsquo; angles; a free end tapers by making it shallower). Bevels take no scoops of their own. Three limits apply to every depth:</p>
+  <p>Each face has a depth: the deepest of its weathering (near a seen convex edge, how far the rolling ball of the drawn radius lies inside the edge), its scoops (the same lattice of paraboloids keyed by the face&rsquo;s normal, so faces facing one way stay in step) and of its cracks&rsquo; V grooves (a groove is a depth that falls off the trace at the walls&rsquo; angles; a free end tapers by making it shallower). Bevels take no scoops of their own. Three limits apply to every depth:</p>
   <ol>
     <li><b>Slope budget.</b> A face facing down at angle &alpha; may tilt no more than 65&deg; &minus; &alpha; (rock is free in the 55&ndash;65&deg; band), so no new surface faces down past the target. This replaces the leaning-face and no-headroom rules.</li>
     <li><b>Clearance.</b> A depth never reaches past another stone&rsquo;s surface: along the face&rsquo;s inward normal, it stops where it would cross into or out of a neighbour from the contact graph; and where a neighbour lies within the hold distance in front of the face, it is 0. One ray against a few convex neighbours per vertex. This one rule replaces covered faces, the face-to-face tie, the rest rule and its parallel exception, and the pocket at joints. It allows a scoop to bare air and never another stone.</li>
     <li><b>Thickness.</b> A depth is at most half the stone&rsquo;s own thickness along the normal, so a thin slab is never scooped through from both sides.</li>
   </ol>
-  <p>Each limit is a clamp, so the clamped field is then limited in slope across the face once (a two-pass distance on the face&rsquo;s lattice), which replaces the climb no steeper than 60&deg;.</p>
+  <p>Weathering is smooth, so it needs no crease splitting; it is applied first, and the scoops and cracks are measured from the weathered surface, so a worn edge is still chipped. Each limit is a clamp, so the clamped field is then limited in slope across the face once (a two-pass distance on the face&rsquo;s lattice), which replaces the climb no steeper than 60&deg;.</p>
   <h3>Placing the vertices</h3>
   <p>A vertex on one face moves in along the normal by the depth. A vertex on an edge or a corner moves to where the displaced surfaces of its two or three faces meet (a 2&times;2 or 3&times;3 solve). Then each vertex is checked against its stone&rsquo;s other displaced faces, and moved onto any it lies outside: that is how a scoop running off an edge chips it, the same &ldquo;under every face pushed in&rdquo; formula as today, sampled at points the mesh already has instead of meshed afresh.</p>
   <h3>Sharp where it should be</h3>
@@ -208,7 +208,8 @@ dd { margin: 0; }
       <tr><td>Envelope, layers, spines, cells, Fuse</td><td class="n">~330</td><td>Stays</td></tr>
       <tr><td>Holding chain (lowering, held places, flare, dead pieces)</td><td class="n">~170</td><td>Lowering moves to stage 2 on masses; held places and flare stay, in stage 3</td></tr>
       <tr><td>Keeps, guards, top-down carve, attempt statuses, joint drawback, flare cap</td><td class="n">~250</td><td>Goes: no stone above exists when a stone is cut</td></tr>
-      <tr><td>Carve kernel, bevels, facets, round, weathering</td><td class="n">~580</td><td>Stays, simpler (no guards to place against)</td></tr>
+      <tr><td>Carve kernel, bevels, facets, round</td><td class="n">~530</td><td>Stays, simpler (no guards to place against); the flare joins its pass</td></tr>
+      <tr><td>Weathering (planes round each edge)</td><td class="n">~50</td><td>Goes: a depth field in stage 4</td></tr>
       <tr><td>Cracks: network</td><td class="n">~120</td><td>Stays</td></tr>
       <tr><td>Cracks: trace walking, face cutting, merging, rebuild</td><td class="n">~510</td><td>Goes: a crack is a depth field in stage 4 (about 100 lines)</td></tr>
       <tr><td>Flaking</td><td class="n">274 (dense)</td><td>Rewritten as stage 4 (about 250 lines, plain)</td></tr>
@@ -220,14 +221,14 @@ dd { margin: 0; }
 </section>
 
 <section>
-  <h2>Decisions for you</h2>
+  <h2>Decisions</h2>
   <dl>
-    <dt>Support before cuts?</dt>
-    <dd>Recommend support first, then bevels and facets (flare edges get bevelled; no flare cuts a bevel). Your order works too.</dd>
-    <dt>Weathering</dt>
-    <dd>Recommend it stays a convex rounding of planes in stage 3, with the bevels: it chops edges, which is shape. The alternative is a depth field in stage 4, which would round only seen edges and could be finer, but must then obey the same clamps.</dd>
+    <dt>Flare and cuts <span class="tag yes">decided</span></dt>
+    <dd>One pass of cuts per stone: flare, bevels, facets, Round. A flare under a bottom edge replaces that edge&rsquo;s bevel.</dd>
+    <dt>Weathering <span class="tag yes">decided</span></dt>
+    <dd>A depth field in stage 4 with flaking and cracks, under the same limits.</dd>
     <dt>Groove at horizontal joints</dt>
-    <dd>Bottom-up, a stone above stands on a bevelled top, so its underside at the front is its flare: a 55&deg; face over the 45&deg; bevel. Recommend the flare at 45&deg; for the stone&rsquo;s own front so the groove reads symmetric; or keep 55&deg; for more stone.</dd>
+    <dd>Bottom-up, a stone above stands on a bevelled top, so its underside at the front is its flare. Recommend the flare at 45&deg; on a stone&rsquo;s front so the groove reads symmetric; or keep 55&deg; for more stone.</dd>
     <dt>Exactness of chips and ridges</dt>
     <dd>Option B finds them by splitting; close-ups may be a hair softer than today&rsquo;s exact cuts. Option C is exact and much harder. Recommend B and judge by render.</dd>
   </dl>
@@ -246,9 +247,9 @@ dd { margin: 0; }
 <section>
   <h2>Plan</h2>
   <ol>
-    <li><b>Spike stage 4</b> on Ashlar 1 off the page: remesh, fields, clamps, placement, crease splitting. Measure time, triangles, holes (the per-stone ray check must read 0), red, and render beside today. A day.</li>
+    <li><b>Spike stage 4</b> on Ashlar 1 off the page: remesh, the weathering, scoop and crack fields, clamps, placement, crease splitting. Measure time, triangles, holes (the per-stone ray check must read 0), red, and render beside today. A day.</li>
     <li><b>Stage 2</b>: lowering on masses and the contact graph; holding reads them.</li>
-    <li><b>Stage 3</b>: bottom-up stones; delete keeps, guards and the top-down carve.</li>
+    <li><b>Stage 3</b>: bottom-up stones, one pass of flare, bevels, facets and Round; delete keeps, guards, the top-down carve and weathering&rsquo;s planes.</li>
     <li><b>Stage 4</b> in the page, replacing flaking.</li>
     <li><b>Cracks</b> into stage 4; delete the crack surgery.</li>
     <li>The page&rsquo;s prose rewritten for the current pipeline only, with the new times.</li>
