@@ -2160,6 +2160,8 @@ function surfaceWall(w, seed) {
              like open face), unless the cut there comes within OFF of the plate, or its point lies on that stone's face */
           const others = []; { let cl = [Q[0], Q[1], Q[2]], ch = [Q[0], Q[1], Q[2]]; for (const v of Bp) for (let q2 = 0; q2 < 3; q2++) { cl[q2] = Math.min(cl[q2], v[q2]); ch[q2] = Math.max(ch[q2], v[q2]); }
             for (const j of near(cl, ch, OFF, si)) { const Bj = bodies[j]; let ov = true; for (let q2 = 0; q2 < 3; q2++) if (Bj.l[q2] > ch[q2] + OFF || Bj.h[q2] < cl[q2] - OFF) ov = false; if (!ov) continue;
+              /* a stone with a face the whole cone lies beyond is not reached: found from the cone's corners, before any cutting */
+              { let apart = false; for (let q2 = 0; q2 < Bj.pl.length && !apart; q2 += 4) { const a_ = Bj.pl[q2], b_ = Bj.pl[q2 + 1], c_ = Bj.pl[q2 + 2], d_ = Bj.pl[q2 + 3] + OFF; if (a_ * Q[0] + b_ * Q[1] + c_ * Q[2] <= d_) continue; let all = true; for (let q3 = 0; q3 < Bp.length; q3++) { const v = Bp[q3]; if (a_ * v[0] + b_ * v[1] + c_ * v[2] <= d_) { all = false; break; } } if (all) apart = true; } if (apart) continue; }
               let pj = cone; for (let q2 = 0; q2 < Bj.pl.length && pj.length; q2 += 4) pj = cutSolid(pj, { n: [Bj.pl[q2], Bj.pl[q2 + 1], Bj.pl[q2 + 2]], b: Bj.pl[q2 + 3] + OFF }); if (!pj.length) continue;
               let cap = Bp; for (let q2 = 0; q2 < Bj.pl.length && cap.length >= 3; q2 += 4) cap = clipConvex(cap, [Bj.pl[q2], Bj.pl[q2 + 1], Bj.pl[q2 + 2]], Bj.pl[q2 + 3]); if (cap.length >= 3 && polyArea(cap) > 1e-9) return null;
               let sQ = -Infinity; for (let q2 = 0; q2 < Bj.pl.length; q2 += 4) sQ = Math.max(sQ, Bj.pl[q2] * Q[0] + Bj.pl[q2 + 1] * Q[1] + Bj.pl[q2 + 2] * Q[2] - Bj.pl[q2 + 3]); if (Math.abs(sQ) < FLAKE.least) return null;
@@ -2168,7 +2170,10 @@ function surfaceWall(w, seed) {
           /* nor one that reaches more than FLAKE.overlap of its depth into another scar (but the one it grows from; a pit, struck where no scar is, may overlap any). A crack holds no scar:
              the cracks are cut over the flaking, each where it was traced on the face, so a scar deeper than a crack takes that stretch of it */
           let meetsOne = false; for (const X of cutters) { if (X === parent || X.kind === KIND.CRACK || pit && X.kind === KIND.SCAR || X.lo[0] > hi[0] + OFF || X.hi[0] < lo[0] - OFF || X.lo[1] > hi[1] + OFF || X.hi[1] < lo[1] - OFF || X.lo[2] > hi[2] + OFF || X.hi[2] < lo[2] - OFF) continue;
-            const m_ = -FLAKE.overlap * d; let pp = poly; for (const h of X.planes) { pp = cutSolid(pp, { n: h.n, b: h.b + m_ }); if (!pp.length) break; } if (pp.length) { meetsOne = true; break; } }
+            const m_ = -FLAKE.overlap * d;
+            /* a scar one of whose planes (moved in by the overlap allowed) the whole cut lies beyond is not met: found from the cut's corners, before any cutting */
+            { let apart = false; for (const h of X.planes) { const hb = h.b + m_; let all = true; for (const f_ of poly) { for (const v of f_.verts) if (h.n[0] * v[0] + h.n[1] * v[1] + h.n[2] * v[2] <= hb) { all = false; break; } if (!all) break; } if (all) { apart = true; break; } } if (apart) continue; }
+            let pp = poly; for (const h of X.planes) { pp = cutSolid(pp, { n: h.n, b: h.b + m_ }); if (!pp.length) break; } if (pp.length) { meetsOne = true; break; } }
           if (meetsOne) return null;
           return { planes, lo, hi, kind: KIND.SCAR, poly, k, d, gen: parent ? parent.gen + 1 : 0, cone, others }; };
       for (const [key, e] of edges) {
@@ -2290,7 +2295,11 @@ function surfaceWall(w, seed) {
             if (dx * dx + dy * dy + dz * dz < JOIN * JOIN) { const ra = vfind(ids[i]), rb = vfind(ids[j]); if (ra !== rb) { vrep.set(rb, ra); nJoin++; } } } } } }
     if (vrep.size) for (const F of FAC) for (const pc of F.pieces) pc.v = pc.v.map(vfind);
     const lineVerts = new Map(), lkey = (f, g) => f < g ? f * 1048576 + g : g * 1048576 + f, runsOf = [];
+    const regOf = k => { let reg = lineVerts.get(k); if (!reg) lineVerts.set(k, reg = new Map()); return reg; };
     for (const F of FAC) { const byLine = new Map(), raw = [], runs = [];
+      if (F.pieces.length === 1) { const pc = F.pieces[0], v = pc.v, e = pc.e, m = v.length; let n3 = 0; for (let i = 0; i < m; i++) if (v[i] !== v[(i + 1) % m]) n3++;   /* one piece: its edges are the outline */
+        if (n3 >= 3) for (let i = 0; i < m; i++) { const a = v[i], b = v[(i + 1) % m]; if (a === b) continue; const g = e[i][0]; if (g < 0 || g === F.f) { runs.push([a, b, -1]); nRaw++; continue; } const k = lkey(F.f, g), reg = regOf(k); reg.set(a, 0); reg.set(b, 0); runs.push([a, b, k]); }
+        runsOf.push(runs); continue; }
       for (const pc of F.pieces) { const v = pc.v, e = pc.e, m = v.length; if (new Set(v).size < 3) continue;   /* a piece with two corners is no piece */
         for (let i = 0; i < m; i++) { const a = v[i], b = v[(i + 1) % m]; if (a === b) continue; const g = e[i][0];
           if (g < 0 || g === F.f) { raw.push(a, b); continue; } const k = lkey(F.f, g); let L = byLine.get(k); if (!L) byLine.set(k, L = { g, E: [] }); L.E.push(a, b); } }
@@ -2314,9 +2323,10 @@ function surfaceWall(w, seed) {
     const lrep = new Map(), lfind = k => { let r = k; while (lrep.get(r) !== undefined && lrep.get(r) !== r) r = lrep.get(r); return r; };
     { const at = new Map(); for (const [k, reg] of lineVerts) for (const id of reg.keys()) { const L = at.get(id); if (L) L.push(k); else at.set(id, [k]); }
       const dirOf = new Map(), ud = k => { let d = dirOf.get(k); if (!d) dirOf.set(k, d = unit(cross(PN[Math.floor(k / 1048576)], PN[k % 1048576]))); return d; };
-      const first = new Map(); for (const [id, L] of at) if (L.length > 1) for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) { const a = Math.min(L[i], L[j]), b = Math.max(L[i], L[j]); if (lfind(a) === lfind(b)) continue; if (len(cross(ud(a), ud(b))) < 1e-6) { lrep.set(lfind(b), lfind(a)); continue; }
+      const lidx = new Map(); let nl = 0; for (const k of lineVerts.keys()) lidx.set(k, nl++); const first = new Map();
+      for (const [id, L] of at) if (L.length > 1) for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) { const a = Math.min(L[i], L[j]), b = Math.max(L[i], L[j]); if (lfind(a) === lfind(b)) continue; if (len(cross(ud(a), ud(b))) < 1e-6) { lrep.set(lfind(b), lfind(a)); continue; }
         /* or two corners a real way apart (planes so nearly alike that their lines' directions do not agree to the last place) */
-        const key = a + '|' + b, o = first.get(key); if (o === undefined) first.set(key, id); else if (len(sub(V[o], V[id])) > 1e-3) lrep.set(lfind(b), lfind(a)); }
+        const key = lidx.get(a) * nl + lidx.get(b), o = first.get(key); if (o === undefined) first.set(key, id); else if (len(sub(V[o], V[id])) > 1e-3) lrep.set(lfind(b), lfind(a)); }
       for (const [k, reg] of lineVerts) { const r = lfind(k); if (r === k) continue; const R = lineVerts.get(r); for (const id of reg.keys()) if (!R.has(id)) R.set(id, 0); } }
     const lineSorted = new Map(); for (const [k, reg] of lineVerts) { if (lfind(k) !== k) continue; const f_ = Math.floor(k / 1048576), g_ = k % 1048576, d = cross(PN[f_], PN[g_]); const a = [...reg.keys()].map(id => [id, dot(V[id], d)]).sort((x, y) => x[1] - y[1]); lineSorted.set(k, { id: a.map(x => x[0]), at: new Map(a.map((x, i) => [x[0], i])) }); }
     FAC.forEach((F, fi) => { const N = F.N, e1 = unit(Math.abs(N[0]) < 0.9 ? cross(N, [1, 0, 0]) : cross(N, [0, 1, 0])), e2 = cross(N, e1), nx = new Map();
@@ -2355,20 +2365,21 @@ function surfaceWall(w, seed) {
         for (let q = 0; q < tr.length; q += 3) { let a = tr[q], b = tr[q + 1], c = tr[q + 2]; if (tr.length / 3 === ids.length - 2 + 2 * hs.length && hs.length === 0 && nEarNow) { } else if ((xy[2 * b] - xy[2 * a]) * (xy[2 * c + 1] - xy[2 * a + 1]) - (xy[2 * b + 1] - xy[2 * a + 1]) * (xy[2 * c] - xy[2 * a]) < 0) { const x = b; b = c; c = x; }
           T.push(ids[a], ids[b], ids[c]); TK.push(F.kind); TN.push(N); got++; }
         if (got !== ids.length - 2 + 2 * hs.length) nShort++; } });
-    const unmatched = () => { const m = new Map(), o = []; for (let t = 0; t < TK.length; t++) for (let e = 0; e < 3; e++) { const a = T[3 * t + e], b = T[3 * t + (e + 1) % 3], k = a * 4194304 + b; m.set(k, (m.get(k) || 0) + 1); }
+    let umAt = -1, umWas = null, tVer = 0; const unmatched = () => { if (umAt === tVer) return umWas; umAt = tVer; return umWas = unmatched_(); };
+    const unmatched_ = () => { const m = new Map(), o = []; for (let t = 0; t < TK.length; t++) for (let e = 0; e < 3; e++) { const a = T[3 * t + e], b = T[3 * t + (e + 1) % 3], k = a * 4194304 + b; m.set(k, (m.get(k) || 0) + 1); }
       for (const [k, ab] of m) { const a = Math.floor(k / 4194304), b = k % 4194304, ba = m.get(b * 4194304 + a) || 0; if (ab === 1 && ba === 1) continue; if (b < a && ba > 0) continue; o.push([a, b, ab, ba]); } return o; };
     /* where four or more planes pass within a hair of one point, their triples can name two or three corners a fraction of a micron apart, and a hole
        that small is left between them: corners joined by an open edge under JOIN mm are made one corner (counted), and a triangle left with two is dropped */
     for (let pass = 0; pass < 3; pass++) { const um = unmatched().filter(u => u[2] !== u[3] && len(sub(V[u[0]], V[u[1]])) < JOIN); if (!um.length) break;
       const par = new Map(), find = a => { let r = a; while (par.has(r)) r = par.get(r); return r; }; for (const [a, b] of um) { const ra = find(a), rb = find(b); if (ra !== rb) { par.set(rb, ra); nJoin++; } }
-      let w = 0; for (let t = 0; t < TK.length; t++) { const a = find(T[3 * t]), b = find(T[3 * t + 1]), c = find(T[3 * t + 2]); if (a === b || b === c || a === c) continue; T[3 * w] = a; T[3 * w + 1] = b; T[3 * w + 2] = c; TK[w] = TK[t]; TN[w] = TN[t]; w++; } T.length = 3 * w; TK.length = w; TN.length = w; }
+      let w = 0; for (let t = 0; t < TK.length; t++) { const a = find(T[3 * t]), b = find(T[3 * t + 1]), c = find(T[3 * t + 2]); if (a === b || b === c || a === c) continue; T[3 * w] = a; T[3 * w + 1] = b; T[3 * w + 2] = c; TK[w] = TK[t]; TN[w] = TN[t]; w++; } T.length = 3 * w; TK.length = w; TN.length = w; tVer++; }
     /* the net under it: a small ring of open edges still left (a face a fraction of a millimetre across that went missing, or an outline that did not
        chain) is closed with a fan and counted; a ring longer than HOLE mm round is left open and shown as open */
     { const um = unmatched().filter(u => u[2] === u[3] + 1 || u[3] === u[2] + 1), nxt = new Map(); for (const [a, b, ab, ba] of um) { const f = ab > ba ? a : b, t = ab > ba ? b : a; (nxt.get(f) || nxt.set(f, []).get(f)).push(t); }
       for (const [s0, L0] of nxt) while (L0.length) { const ring = [s0]; let cur = L0.pop(), ok = true; while (cur !== s0) { ring.push(cur); const L = nxt.get(cur); if (!L || !L.length || ring.length > 24) { ok = false; break; } cur = L.pop(); }
         if (!ok || ring.length < 3) continue; let per = 0; for (let q = 0; q < ring.length; q++) per += len(sub(V[ring[q]], V[ring[(q + 1) % ring.length]])); if (per > HOLE) continue;
         let nn = [0, 0, 0]; for (let q = 0; q < ring.length; q++) nn = add(nn, cross(V[ring[(q + 1) % ring.length]], V[ring[q]])); const N_ = len(nn) > 1e-12 ? unit(nn) : TN[0];
-        for (let q = 1; q + 1 < ring.length; q++) { T.push(ring[0], ring[q + 1], ring[q]); TK.push(KIND.SCAR); TN.push(N_); } nHole++; } }
+        for (let q = 1; q + 1 < ring.length; q++) { T.push(ring[0], ring[q + 1], ring[q]); TK.push(KIND.SCAR); TN.push(N_); } nHole++; tVer++; } }
     const out = []; for (let t = 0; t < TK.length; t++) { const a = V[T[3 * t]], b = V[T[3 * t + 1]], c = V[T[3 * t + 2]], l = len(cross(sub(b, a), sub(c, a))); out.push({ v: [a, b, c], n: TN[t], kind: TK[t], area: l / 2, mesh: true }); }
     for (const [, , ab, ba] of unmatched()) { if (ab === ba) nMany++; else nOpen++; }
     nTri += out.length; nVert += V.length; st.flaked = out.length;
