@@ -359,15 +359,30 @@ dd { margin: 0; max-width: 60ch; }
   <div class="box">
     <h3 style="margin-top:0">Language check</h3>
     <ul>
-      <li><b>Words:</b> the rewrite (steps 0 to 3 below) adds, renames or removes no control. Inside the code: cell, cut, break, map, cover, lower, groove, hold. &ldquo;Break&rdquo; is new and would need a registry row if it ever reaches the tile language; &ldquo;cleave&rdquo; is the earlier word for the plane-family maker and was ruled a kind by Orin on 18 Nov.</li>
+      <li><b>Words:</b> in the page, steps 0 and 1 add, rename or remove no control. Step 2 is different: it replaces the Rust <code>cliff</code> element, which has words of its own, so it needs a reviewed table from the page&rsquo;s words to the registry&rsquo;s before it is built. Inside the code: cell, cut, break, map, cover, lower, groove, hold. &ldquo;Break&rdquo; is new and would need a registry row if it ever reaches the tile language; &ldquo;cleave&rdquo; is the earlier word for the plane-family maker and was ruled a kind by Orin on 18 Nov.</li>
       <li><b>Kinds:</b> three (cell, break, map) where today there are about a dozen (piece, mass, body, joiner, guard, top, rest patch, cutter, trace, chain, step, scar, pit). A stone is a cell with a map on each face.</li>
-      <li><b>Kernel:</b> cut a cell by a half-space. Every other operation reduces to it.</li>
+      <li><b>Kernel:</b> a cell has two verbs, cut (by a half-space) and corners. Section, grow, hull, the cone, overlap and emit derive from those two. (An earlier version of this page said cut alone; Orin corrected it.)</li>
       <li><b>Second paths removed:</b> nine clippers to one; support decided once and painted from it; what is outside decided once; the page&rsquo;s kernel, mesher and measure against the program&rsquo;s.</li>
       <li><b>One meaning, several words (open, needs Shawn):</b> Direction, Reach, Width, Thickness for stones against Network and Spacing for cracks. Both describe a break.</li>
       <li><b>Holes closed:</b> a crack on a scar; a scar at a seam; a stage at zero.</li>
-      <li><b>Review:</b> this page has not been to Orin. Step 4 adds words and goes there before it is built.</li>
+      <li><b>Review:</b> Orin reviewed this design on 28 Nov; the rulings are below. Step 4 adds words and goes back before it is built.</li>
     </ul>
   </div>
+
+  <h3>Orin&rsquo;s review</h3>
+  <p><b>Verdict: accreting.</b> The core is sound (a stone as a convex cell of planes; a face&rsquo;s surface as a height that marks only lower), but the page claimed more unity than it has. I accept all of these; none changes the first step, and several make it simpler.</p>
+  <ol>
+    <li><b>The cell already exists.</b> <code>dt_geom::Convex</code> has <code>cut</code> and <code>corners</code>; it needs a 2D sibling, not a new type. <code>dt_kit::Support</code> already means what Hold means, and <code>cliff/relief.rs</code> is already a height over a face. The rewrite extends these.</li>
+    <li><b>Break claimed too much.</b> It should be called <code>cleave</code> (ruled a kind on 18 Nov) and mean only an exact partition of a cell: by planes, seeds or spines. Faceting is a cut, and strike points do not make a partition. Joint is a grow and Fuse makes a body; both act after it.</li>
+    <li><b>The map has one verb, lower.</b> A crack is a mark measured from the surface it lands on; a scar is a mark measured from the face. Groove is not a second verb, and cover is not a verb at all.</li>
+    <li><b>One word for what no other stone hides: seen.</b> Today seen, open, outside and free face all name it, and <code>cover</code> already means something else in the registry.</li>
+    <li><b>The edge should be the general case.</b> A stone is its cell less its marks&rsquo; cells, and a mark measured from a face lowers every face map its cell reaches. Stated that way the result is today&rsquo;s cone exactly, and the edge rule above is only a stopgap. A scar that reaches a neighbour chips it by the same sentence, so the &ldquo;within a scar&rsquo;s depth of open&rdquo; rule goes; only faces that coincide need an owner.</li>
+    <li><b>Support is a value,</b> a list of contact cells, passed to the shaping and marking stages, and the page must say which shapes the sections are taken from (the carve reads &ldquo;seen&rdquo; before the stones are finished).</li>
+    <li><b>The 55&deg; check belongs to the mark,</b> made before it lowers anything. Done polygon by polygon, a flattened wall stops meeting its neighbour.</li>
+    <li><b>A step is a cleave with a setback,</b> not a flat-floored bowl: a riser square to the face is no height over that face.</li>
+    <li><b>Before the Rust element:</b> a word table from the page&rsquo;s controls to the registry&rsquo;s (Reach, Width, Thickness and Spacing to <code>spacing</code>; Span to <code>carry</code>; Wander to <code>bend</code>; Direction to dip and facing), and the map and support placed behind <code>dt-kit</code>.</li>
+  </ol>
+  <p>Orin&rsquo;s kernel: four kinds (plane, cell, cleave, mark) and five verbs (cut, corners, inside, carry, lower). A map is a face and its marks; a stone is its cells less its marks; everything else derives. Approved as they stand: A5, B3, D2, F2, the intent of C3, and the spike first with Manifold as the fallback.</p>
 </section>
 
 <section>
