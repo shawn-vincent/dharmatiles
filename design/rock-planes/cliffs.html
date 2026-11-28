@@ -2382,15 +2382,17 @@ function surfaceWall(w, seed) {
        put together (they share a corner and run the same way), so both names split alike */
     const lrep = new Map(), lfind = k => { let r = k; while (lrep.get(r) !== undefined && lrep.get(r) !== r) r = lrep.get(r); return r; };
     (() => {
-    { const at = new Map(); for (const [k, reg] of lineVerts) for (const id of reg.keys()) { const L = at.get(id); if (L) L.push(k); else at.set(id, [k]); }
-      const dirOf = new Map(), ud = k => { let d = dirOf.get(k); if (!d) dirOf.set(k, d = unit(cross(PN[Math.floor(k / 1048576)], PN[k % 1048576]))); return d; };
-      const lidx = new Map(); let nl = 0; for (const k of lineVerts.keys()) lidx.set(k, nl++); const first = new Map();
-      for (const [id, L] of at) if (L.length > 1) for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) { const a = Math.min(L[i], L[j]), b = Math.max(L[i], L[j]); if (lfind(a) === lfind(b)) continue; if (len(cross(ud(a), ud(b))) < 1e-6) { lrep.set(lfind(b), lfind(a)); continue; }
-        /* or two corners a real way apart (planes so nearly alike that their lines' directions do not agree to the last place) */
-        const key = lidx.get(a) * nl + lidx.get(b), o = first.get(key); if (o === undefined) first.set(key, id); else if (len(sub(V[o], V[id])) > 1e-3) lrep.set(lfind(b), lfind(a)); }
-      for (const [k, reg] of lineVerts) { const r = lfind(k); if (r === k) continue; const R = lineVerts.get(r); for (const id of reg.keys()) if (!R.has(id)) R.set(id, 0); } }
+    { const LK = [...lineVerts.keys()], nl = LK.length, slot = new Int32Array(4 * V.length).fill(-1), extra = new Map();   /* each corner's lines: four by number, any more in a list */
+      for (let li = 0; li < nl; li++) for (const id of lineVerts.get(LK[li]).keys()) { let q = 4 * id; const e = q + 4; while (q < e && slot[q] >= 0) q++; if (q < e) slot[q] = li; else { const L = extra.get(id); if (L) L.push(li); else extra.set(id, [li]); } }
+      const dirs = new Array(nl), ud = li => dirs[li] || (dirs[li] = unit(cross(PN[Math.floor(LK[li] / 1048576)], PN[LK[li] % 1048576]))), first = new Map(), L = [];
+      for (let id = 0; id < V.length; id++) { if (slot[4 * id + 1] < 0) continue; L.length = 0; for (let q = 4 * id; q < 4 * id + 4 && slot[q] >= 0; q++) L.push(slot[q]); const X = extra.get(id); if (X) for (const li of X) L.push(li);
+        for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) { const ia = Math.min(L[i], L[j]), ib = Math.max(L[i], L[j]), a = Math.min(LK[ia], LK[ib]), b = Math.max(LK[ia], LK[ib]); if (lfind(a) === lfind(b)) continue; if (len(cross(ud(ia), ud(ib))) < 1e-6) { lrep.set(lfind(b), lfind(a)); continue; }
+          /* or two corners a real way apart (planes so nearly alike that their lines' directions do not agree to the last place) */
+          const key = ia * nl + ib, o = first.get(key); if (o === undefined) first.set(key, id); else if (len(sub(V[o], V[id])) > 1e-3) lrep.set(lfind(b), lfind(a)); } }
+      if (lrep.size) for (const [k, reg] of lineVerts) { const r = lfind(k); if (r === k) continue; const R = lineVerts.get(r); for (const id of reg.keys()) if (!R.has(id)) R.set(id, 0); } }
     })();
-    const lineSorted = new Map(); for (const [k, reg] of lineVerts) { if (lfind(k) !== k) continue; const f_ = Math.floor(k / 1048576), g_ = k % 1048576, d = cross(PN[f_], PN[g_]); const a = [...reg.keys()].map(id => [id, dot(V[id], d)]).sort((x, y) => x[1] - y[1]); lineSorted.set(k, { id: a.map(x => x[0]), at: new Map(a.map((x, i) => [x[0], i])) }); }
+    const lineSorted = new Map(); for (const [k, reg] of lineVerts) { if (lrep.size && lfind(k) !== k) continue; const d = cross(PN[Math.floor(k / 1048576)], PN[k % 1048576]), ids = [...reg.keys()]; for (let q = 0; q < ids.length; q++) { const p_ = V[ids[q]]; tArr[ids[q]] = p_[0] * d[0] + p_[1] * d[1] + p_[2] * d[2]; }
+      ids.sort((x, y) => tArr[x] - tArr[y]); const at = new Map(); for (let q = 0; q < ids.length; q++) at.set(ids[q], q); lineSorted.set(k, { id: ids, at }); }
     FAC.forEach((F, fi) => { const N = F.N;
       /* a face of one piece whose outline no other face's corner splits is that piece: a fan, with nothing chained or looked up */
       if (F.pieces.length === 1) { const R = runsOf[fi], n_ = R.length; let plain = n_ >= 3; for (let q = 0; q < n_ && plain; q++) { const r = R[q]; if (r[2] < 0 || r[1] !== R[(q + 1) % n_][0]) { plain = false; break; } const S = lineSorted.get(lfind(r[2])), d_ = S.at.get(r[0]) - S.at.get(r[1]); if (d_ !== 1 && d_ !== -1) plain = false; }
