@@ -2277,9 +2277,10 @@ function surfaceWall(w, seed) {
       return { v: ov, e: oe, bb: null }; };
     /* a piece split by a plane into the part outside it and the part inside, as clipPoly gives each, with the distances and the crossings worked out once */
     const NONE = { v: [], e: [], bb: null };
-    const splitPoly = (f, poly, g, sg) => { const v = poly.v, e = poly.e, m = v.length; if (!m) return [poly, poly]; const d = new Float64Array(m); let outR = false, inR = false, outO = false, inO = false;
-      for (let i = 0; i < m; i++) { const x = d[i] = dist(g, sg, V[v[i]]); if (x > EPS) outR = true; if (x <= EPS) inR = true; if (-x > EPS) outO = true; if (-x <= EPS) inO = true; }
-      let xc = null; const X = (i, j) => { if (!xc) xc = new Int32Array(m).fill(-1); if (xc[i] >= 0) return xc[i]; const a = V[v[i]], b = V[v[j]], t = d[i] / (d[i] - d[j]), m0 = a[0] + (b[0] - a[0]) * t, m1 = a[1] + (b[1] - a[1]) * t, m2 = a[2] + (b[2] - a[2]) * t; let r = -1;
+    const spD = new Float64Array(256), spX = new Int32Array(256);   /* the split's own scratch: distances and crossings, one call at a time */
+    const splitPoly = (f, poly, g, sg) => { const v = poly.v, e = poly.e, m = v.length; if (!m) return [poly, poly]; const d = m <= 256 ? spD : new Float64Array(m); let outR = false, inR = false, outO = false, inO = false;
+      { const n_ = PN[g], b_ = PB[g]; for (let i = 0; i < m; i++) { const p_ = V[v[i]], x = d[i] = sg * (n_[0] * p_[0] + n_[1] * p_[1] + n_[2] * p_[2] - b_); if (x > EPS) outR = true; if (x <= EPS) inR = true; if (-x > EPS) outO = true; if (-x <= EPS) inO = true; } }
+      let xc = null; const X = (i, j) => { if (!xc) { xc = m <= 256 ? spX : new Int32Array(m); xc.fill(-1, 0, m); } if (xc[i] >= 0) return xc[i]; const a = V[v[i]], b = V[v[j]], t = d[i] / (d[i] - d[j]), m0 = a[0] + (b[0] - a[0]) * t, m1 = a[1] + (b[1] - a[1]) * t, m2 = a[2] + (b[2] - a[2]) * t; let r = -1;
         if (e[i][0] >= 0) { const x = tri(f, e[i][0], g); if (x >= 0 && Math.abs(V[x][0] - m0) + Math.abs(V[x][1] - m1) + Math.abs(V[x][2] - m2) < 3e-5) r = x; } if (r < 0) r = weld([m0, m1, m2]); return xc[i] = r; };
       const side = (s_) => { const ov = [], oe = [], lab = [g, s_ * sg]; for (let i = 0; i < m; i++) { const j = (i + 1) % m, inI = s_ * d[i] <= EPS, inJ = s_ * d[j] <= EPS;
           if (inI) { ov.push(v[i]); oe.push(e[i]); if (!inJ) { ov.push(X(i, j)); oe.push(lab); } } else if (inJ) { ov.push(X(i, j)); oe.push(e[i]); } } return { v: ov, e: oe, bb: null }; };
@@ -2293,7 +2294,7 @@ function surfaceWall(w, seed) {
     /* the cutters by place: a grid of cells CG mm, each listing the cutters whose box reaches it, so a facet asks only those near it */
     const CG = 2, cgrid = new Map(), ck = (x, y, z) => (x + 4096) * 67108864 + (y + 4096) * 8192 + (z + 4096);
     cutters.forEach((C, ci) => { for (let x = Math.floor(C.lo[0] / CG); x <= Math.floor(C.hi[0] / CG); x++) for (let y = Math.floor(C.lo[1] / CG); y <= Math.floor(C.hi[1] / CG); y++) for (let z = Math.floor(C.lo[2] / CG); z <= Math.floor(C.hi[2] / CG); z++) { const k = ck(x, y, z); (cgrid.get(k) || cgrid.set(k, []).get(k)).push(ci); } });
-    const nearCutters = bb => { const got = new Set(); for (let x = Math.floor((bb[0][0] - 1e-6) / CG); x <= Math.floor((bb[1][0] + 1e-6) / CG); x++) for (let y = Math.floor((bb[0][1] - 1e-6) / CG); y <= Math.floor((bb[1][1] + 1e-6) / CG); y++) for (let z = Math.floor((bb[0][2] - 1e-6) / CG); z <= Math.floor((bb[1][2] + 1e-6) / CG); z++) { const L = cgrid.get(ck(x, y, z)); if (L) for (const ci of L) got.add(ci); } return [...got].sort((a, b) => a - b); };
+    const ncStamp = new Int32Array(cutters.length); let ncTick = 0; const nearCutters = bb => { const got = []; ncTick++; for (let x = Math.floor((bb[0][0] - 1e-6) / CG); x <= Math.floor((bb[1][0] + 1e-6) / CG); x++) for (let y = Math.floor((bb[0][1] - 1e-6) / CG); y <= Math.floor((bb[1][1] + 1e-6) / CG); y++) for (let z = Math.floor((bb[0][2] - 1e-6) / CG); z <= Math.floor((bb[1][2] + 1e-6) / CG); z++) { const L = cgrid.get(ck(x, y, z)); if (L) for (let q = 0; q < L.length; q++) { const ci = L[q]; if (ncStamp[ci] !== ncTick) { ncStamp[ci] = ncTick; got.push(ci); } } } return got.sort((a, b) => a - b); };
     const facet = (f, N, base, owner, kind) => {
       let pieces = [base]; const bb = boxOf(base.v);
       const basePts = base.v.map(i => V[i]), nearL = nearCutters(bb);
@@ -2308,7 +2309,7 @@ function surfaceWall(w, seed) {
           let Q = basePts; for (let q = 0; q < CP.length; q++) { Q = clipConvex(Q, CP[q].n, CP[q].b + 1e-6); if (Q.length < 3) break; } if (Q.length < 3) continue;
           const l = [1e9, 1e9, 1e9], h_ = [-1e9, -1e9, -1e9]; for (let q = 0; q < Q.length; q++) { const v = Q[q]; for (let j = 0; j < 3; j++) { if (v[j] < l[j]) l[j] = v[j]; if (v[j] > h_[j]) h_[j] = v[j]; } } cb = [l, h_]; } }
         for (let np = 0; np < pieces.length; np++) { const pc = pieces[np]; if (!meets(cb, pc.bb || (pc.bb = boxOf(pc.v)))) { next.push(pc); continue; } let clear = false; const pv = pc.v;
-          for (let q = 0; q < npl && !clear; q++) { const g = pl[q][0], sg = pl[q][1]; if (g === f) continue; let all = true; for (let w = 0; w < pv.length; w++) if (dist(g, sg, V[pv[w]]) < EPS) { all = false; break; } if (all) clear = true; }
+          for (let q = 0; q < npl && !clear; q++) { const g = pl[q][0], sg = pl[q][1]; if (g === f) continue; const n_ = PN[g], b_ = PB[g]; let all = true; for (let w = 0; w < pv.length; w++) { const x = V[pv[w]]; if (sg * (n_[0] * x[0] + n_[1] * x[1] + n_[2] * x[2] - b_) < EPS) { all = false; break; } } if (all) clear = true; }
           if (clear) { next.push(pc); continue; }
           /* split by the cutter's planes one by one, the part outside each kept; if what is left inside has no area the cutter only nears the piece: it stays whole */
           const outs = []; let rest = pc; for (let q = 0; q < npl; q++) { const g = pl[q][0], sg = pl[q][1]; if (g === f) continue; const sp = splitPoly(f, rest, g, sg), o = sp[0]; if (o.v.length >= 3) outs.push(o); rest = sp[1]; if (rest.v.length < 3) break; }
@@ -2327,8 +2328,9 @@ function surfaceWall(w, seed) {
     cutters.forEach((C, ci) => { const cand = C.planes.map((h, i) => [h.n, h.b, cutPl[ci][i]]);
       /* an edge of a cutter's face lies on another of the cutter's planes or on a face of the stone the cutter was clipped by: only those are tried (every face of the stone, if one is not known) */
       { let all = false; const seen = new Set(); for (const F of C.poly) if (F.role === 'stone') { const sc = stoneByN.get(F.n); if (!sc) { all = true; break; } if (!seen.has(sc)) { seen.add(sc); cand.push(sc); } } if (all) { cand.length = C.planes.length; for (const sc of stoneCand) cand.push(sc); } }
+      const wid = new Map();
       for (const F of C.poly) { if (F.role !== 'cut' || F.verts.length < 3) continue; const [f, sf] = pid(F.n, F.b), N = mul(F.n, -1), ids = [], e = [];
-        for (const x of F.verts) { const i = weld(x); if (ids[ids.length - 1] !== i) ids.push(i); } if (ids.length > 1 && ids[0] === ids[ids.length - 1]) ids.pop(); if (ids.length < 3) continue;
+        for (const x of F.verts) { let i = wid.get(x); if (i === undefined) wid.set(x, i = weld(x)); if (ids[ids.length - 1] !== i) ids.push(i); } if (ids.length > 1 && ids[0] === ids[ids.length - 1]) ids.pop(); if (ids.length < 3) continue;
         if (areaOf(ids, N) < 0) ids.reverse();
         for (let q = 0; q < ids.length; q++) { const a = V[ids[q]], b = V[ids[(q + 1) % ids.length]]; let lab = [-1, 0];
           { let bd = 6e-5; for (const [cn, cb, gi] of cand) { if (gi[0] === f) continue; const d_ = Math.max(Math.abs(dot(cn, a) - cb), Math.abs(dot(cn, b) - cb)); if (d_ < bd) { bd = d_; lab = gi; } } } e.push(lab); }
@@ -2356,7 +2358,7 @@ function surfaceWall(w, seed) {
     (() => {   /* (a function of its own: the one around it is past the size the engine's compiler will make fast) */
     for (const F of FAC) { const byLine = new Map(), raw = [], runs = [];
       if (F.pieces.length === 1) { const pc = F.pieces[0], v = pc.v, e = pc.e, m = v.length; let n3 = 0; for (let i = 0; i < m; i++) if (v[i] !== v[(i + 1) % m]) n3++;   /* one piece: its edges are the outline */
-        if (n3 >= 3) for (let i = 0; i < m; i++) { const a = v[i], b = v[(i + 1) % m]; if (a === b) continue; const g = e[i][0]; if (g < 0 || g === F.f) { runs.push([a, b, -1]); nRaw++; continue; } const k = lkey(F.f, g), reg = regOf(k); reg.set(a, 0); reg.set(b, 0); runs.push([a, b, k]); }
+        if (n3 >= 3) for (let i = 0; i < m; i++) { const a = v[i], b = v[(i + 1) % m]; if (a === b) continue; const g = e[i][0]; if (g < 0 || g === F.f) { runs.push(a, b, -1); nRaw++; continue; } const k = lkey(F.f, g), reg = regOf(k); reg.set(a, 0); reg.set(b, 0); runs.push(a, b, k); }
         runsOf.push(runs); continue; }
       for (const pc of F.pieces) { const v = pc.v, e = pc.e, m = v.length; if (new Set(v).size < 3) continue;   /* a piece with two corners is no piece */
         for (let i = 0; i < m; i++) { const a = v[i], b = v[(i + 1) % m]; if (a === b) continue; const g = e[i][0];
@@ -2373,9 +2375,9 @@ function surfaceWall(w, seed) {
         net.push([k, ids, cov]); }
       for (const [k, ids, cov] of net) { const reg = regOf(k);
         for (let x = 0; x + 1 < ids.length;) { const sg = Math.sign(cov[x]); if (!sg) { x++; continue; } let y = x; while (y + 2 < ids.length && Math.sign(cov[y + 1]) === sg && lnOf[ids[y + 1]] === k) y++;
-          const a = ids[x], b = ids[y + 1]; runs.push(sg > 0 ? [a, b, k] : [b, a, k]); reg.set(a, 0); reg.set(b, 0); x = y + 1; } }
+          const a = ids[x], b = ids[y + 1]; if (sg > 0) runs.push(a, b, k); else runs.push(b, a, k); reg.set(a, 0); reg.set(b, 0); x = y + 1; } }
       { const seen = new Map(); for (let q = 0; q < raw.length; q += 2) { const a = raw[q], b = raw[q + 1], r = b * 4194304 + a; if (seen.get(r) > 0) { seen.set(r, seen.get(r) - 1); continue; } const k = a * 4194304 + b; seen.set(k, (seen.get(k) || 0) + 1); }
-        for (const [k, c] of seen) for (let q = 0; q < c; q++) { runs.push([Math.floor(k / 4194304), k % 4194304, -1]); nRaw++; } }
+        for (const [k, c] of seen) for (let q = 0; q < c; q++) { runs.push(Math.floor(k / 4194304), k % 4194304, -1); nRaw++; } }
       runsOf.push(runs); }
     })();
     /* two pairs of planes that share a corner and a direction name one line (four planes through it: a crack's steps, a scar's cap on a face): their corners are
@@ -2395,11 +2397,12 @@ function surfaceWall(w, seed) {
       ids.sort((x, y) => tArr[x] - tArr[y]); const at = new Map(); for (let q = 0; q < ids.length; q++) at.set(ids[q], q); lineSorted.set(k, { id: ids, at }); }
     FAC.forEach((F, fi) => { const N = F.N;
       /* a face of one piece whose outline no other face's corner splits is that piece: a fan, with nothing chained or looked up */
-      if (F.pieces.length === 1) { const R = runsOf[fi], n_ = R.length; let plain = n_ >= 3; for (let q = 0; q < n_ && plain; q++) { const r = R[q]; if (r[2] < 0 || r[1] !== R[(q + 1) % n_][0]) { plain = false; break; } const S = lineSorted.get(lfind(r[2])), d_ = S.at.get(r[0]) - S.at.get(r[1]); if (d_ !== 1 && d_ !== -1) plain = false; }
-        if (plain) { for (let q = 1; q + 1 < n_; q++) { T.push(R[0][0], R[q][0], R[q + 1][0]); TK.push(F.kind); TN.push(N); } return; } }
+      if (F.pieces.length === 1) { const R = runsOf[fi], n_ = R.length / 3; let plain = n_ >= 3;   /* (a run is three numbers: from, to, line) */
+        for (let q = 0; q < n_ && plain; q++) { const k = R[3 * q + 2]; if (k < 0 || R[3 * q + 1] !== R[3 * ((q + 1) % n_)]) { plain = false; break; } const S = lineSorted.get(lrep.size ? lfind(k) : k), d_ = S.at.get(R[3 * q]) - S.at.get(R[3 * q + 1]); if (d_ !== 1 && d_ !== -1) plain = false; }
+        if (plain) { for (let q = 1; q + 1 < n_; q++) { T.push(R[0], R[3 * q], R[3 * q + 3]); TK.push(F.kind); TN.push(N); } return; } }
       const e1 = unit(Math.abs(N[0]) < 0.9 ? cross(N, [1, 0, 0]) : cross(N, [0, 1, 0])), e2 = cross(N, e1), nx = new Map();
       const addE = (a, b) => { if (a === b) return; let L = nx.get(a); if (!L) nx.set(a, L = []); L.push(b); };
-      for (const [a, b, k] of runsOf[fi]) { if (k < 0) { addE(a, b); continue; } const S = lineSorted.get(lfind(k)), i = S.at.get(a), j = S.at.get(b); if (i < j) for (let x = i; x < j; x++) addE(S.id[x], S.id[x + 1]); else for (let x = i; x > j; x--) addE(S.id[x], S.id[x - 1]); }
+      for (let q_ = 0, R_ = runsOf[fi]; q_ < R_.length; q_ += 3) { const a = R_[q_], b = R_[q_ + 1], k = R_[q_ + 2]; if (k < 0) { addE(a, b); continue; } const S = lineSorted.get(lfind(k)), i = S.at.get(a), j = S.at.get(b); if (i < j) for (let x = i; x < j; x++) addE(S.id[x], S.id[x + 1]); else for (let x = i; x > j; x--) addE(S.id[x], S.id[x - 1]); }
       const U = id => { const p = V[id]; return [p[0] * e1[0] + p[1] * e1[1] + p[2] * e1[2], p[0] * e2[0] + p[1] * e2[1] + p[2] * e2[2]]; }, loops = [];
       for (const [s0, L0] of nx) while (L0.length) { const loop = [s0]; let prev = s0, cur = L0.pop(), guard = 0, ok = true;
           while (cur !== s0) { if (guard++ > 20000) { ok = false; break; } loop.push(cur); const L = nx.get(cur); if (!L || !L.length) { ok = false; break; }
