@@ -1,0 +1,527 @@
+<title>Cliffs, Reconsidered</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column of a design review; charts, wide tables and the pipeline figures scroll in their own boxes; one live sketch sits inside the design section.
+   Tokens are the dharmatiles visual system's (Lichen & Linen by day, Moonpool at night), as on Cliffs from Scratch; --s1..--s4 are chart series, validated on --raised in both themes. */
+:root {
+  --f-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-code: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --bg: #F3F2EC; --panel: #E6EAE1; --raised: #FCFCF8; --line: #C9D1C8; --line-2: #AEBBB0;
+  --ink: #1D2922; --muted: #657168;
+  --accent: #287B62; --accent-soft: #D4E6DC; --on-accent: #F5FFF9;
+  --ok: #397A55; --err: #B83B2E; --band: #C46A10;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --plate: #D9E0EB;
+  --r: 5px; --r-lg: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-soft: #123A3A; --on-accent: #051513;
+  --ok: #5CC28A; --err: #F07A6A; --band: #F0A050;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --plate: #D9E0EB;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #081319; --panel: #0E2028; --raised: #172D37; --line: #29454D; --line-2: #3B5C66;
+  --ink: #EAF7F5; --muted: #91A9AD;
+  --accent: #38C9B3; --accent-soft: #123A3A; --on-accent: #051513;
+  --ok: #5CC28A; --err: #F07A6A; --band: #F0A050;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --plate: #D9E0EB;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/24px var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 64px; margin: 0; }
+.wrap { max-width: 860px; margin: 0 auto; display: grid; gap: 30px; }
+.wrap > * { min-width: 0; }
+header { display: grid; gap: 8px; }
+h1 { font: 800 40px/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin: 0; text-wrap: balance; }
+h2 { font: 800 26px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; margin: 0 0 4px; text-wrap: balance; }
+h3 { font: 600 16px/1.3 var(--f-body); margin: 14px 0 2px; }
+p, li { max-width: 68ch; }
+p { margin: 6px 0; }
+ul, ol { margin: 6px 0; padding-left: 22px; }
+li { margin: 4px 0; }
+.lede { color: var(--muted); font-size: 16px; line-height: 25px; margin: 0; }
+.meta { font: 12px/18px var(--f-code); color: var(--muted); }
+section { display: grid; gap: 6px; }
+section > * { min-width: 0; }
+code, .mono { font-family: var(--f-code); font-size: 13px; }
+.box { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; }
+.rec { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-lg); padding: 14px 16px; }
+.rec h3 { margin-top: 0; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 20px; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+td.n, th.n { font-family: var(--f-code); font-size: 13px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+tr.pick td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+table.nums td:first-child, table.nums th { white-space: nowrap; }
+.tag { display: inline-block; font: 600 11px/18px var(--f-code); padding: 0 7px; border-radius: 9px; border: 1px solid var(--line-2); color: var(--muted); white-space: nowrap; }
+.tag.m { border-color: var(--accent); color: var(--accent); }
+.tag.e { border-color: var(--band); color: var(--band); }
+.note { color: var(--muted); font-size: 13px; line-height: 19px; }
+/* findings */
+.finds { display: grid; gap: 12px; counter-reset: f; }
+.find { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; display: grid; gap: 4px; }
+.find h3 { margin: 0; display: flex; gap: 10px; align-items: baseline; }
+.find h3::before { counter-increment: f; content: counter(f); font: 800 22px/1 var(--f-display); color: var(--accent); min-width: 18px; }
+.find .ev { font-size: 13.5px; line-height: 20px; border-top: 1px dashed var(--line-2); padding-top: 6px; margin-top: 4px; }
+.find .ev b { font-weight: 600; }
+/* charts */
+.chart { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; display: grid; gap: 10px; }
+.chart h3 { margin: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.bars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 8px 10px; align-items: center; font-size: 13px; }
+.bars .lab { color: var(--ink); white-space: nowrap; }
+.bars .tot { font-family: var(--f-code); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar { display: flex; gap: 2px; height: 16px; min-width: 0; }
+.bar span { display: block; height: 100%; border-radius: 0; min-width: 1px; }
+.bar span:last-child { border-radius: 0 4px 4px 0; }
+.share { display: grid; gap: 4px; }
+.share .bar { height: 20px; }
+.share .cap { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--muted); }
+#tip { position: fixed; z-index: 20; pointer-events: none; background: var(--ink); color: var(--bg); font: 12px/16px var(--f-code); padding: 5px 8px; border-radius: 4px; max-width: 260px; }
+/* pipelines */
+.pipe { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 1fr); gap: 8px; min-width: 760px; }
+.stage { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 10px 12px; display: grid; gap: 4px; align-content: start; font-size: 13px; line-height: 18px; }
+.stage .k { font: 600 11px/14px var(--f-code); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.stage .t { font: 800 18px/1 var(--f-display); text-transform: uppercase; letter-spacing: .02em; }
+.stage .ask { color: var(--err); border-top: 1px dashed var(--line-2); padding-top: 5px; }
+.stage .knows { color: var(--accent); border-top: 1px dashed var(--line-2); padding-top: 5px; }
+/* the sketch */
+.sketch { background: var(--raised); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; display: grid; gap: 10px; }
+.sketch canvas { width: 100%; height: auto; display: block; border-radius: var(--r); background: var(--plate); }
+.ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button { font: 600 13px/1 var(--f-body); padding: 9px 12px; min-height: 36px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+label.chk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); min-height: 36px; }
+.stat { font: 12.5px/19px var(--f-code); color: var(--muted); }
+.stat b { color: var(--ink); font-weight: 600; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 6px 0; }
+dt { font-weight: 600; }
+dd { margin: 0; max-width: 60ch; }
+@media (max-width: 560px) { dl { grid-template-columns: 1fr; } dt { margin-top: 6px; } h1 { font-size: 32px; } .bars { grid-template-columns: 1fr max-content; } .bars .lab { grid-column: 1 / -1; margin-bottom: -4px; } }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="meta">design/rock-planes · 28 Nov 2026 · Fable 5.2 · measured on this Mac in Node, second build of each wall, Flaking 0.5 to 1 unless said</div>
+  <h1>Cliffs, Reconsidered</h1>
+  <p class="lede">If Cliffs from Spines were written again today, with everything its 222 commits taught: what the engine does, where it fights itself, the options at each layer, and what I would build. Read from the engine itself (2,028 lines), its history, the plan and speed pages, and seven earlier design pages. The look stays within reach of today&rsquo;s; nothing here needs pixel identity.</p>
+</header>
+
+<section>
+  <h2>The short answer</h2>
+  <div class="rec">
+    <h3>Verdict: one good idea, said five ways</h3>
+    <p>The engine&rsquo;s good idea is that <b>a stone is a convex cell: a list of planes</b>. Everything solid about it comes from there: support by construction, no red on an unflaked wall, a Granite wall&rsquo;s stones in 18 ms. Everything that hurts comes from the places that leave the idea: holes and repairs, a second and a half for the surface, five flaking designs in two days, cracks that cannot cross a scar.</p>
+    <p>Three changes, in order of value:</p>
+    <ol>
+      <li><b>Make the surface; do not cut it.</b> A flake scar is a dent half a millimetre deep in a face. Today it is a 3D solid subtracted from a 3D solid, and the pass that recovers the surface is 89% of the build. As a height over its face a scar is seven planes, and the flaked face is a flat map of polygons, each with one plane. A crack is then a V sunk along a line into whatever the map holds, so it runs across scars by construction.</li>
+      <li><b>Know; do not ask.</b> No stage ever makes the wall&rsquo;s outside. Each one finds it again by asking &ldquo;is this point in another stone?&rdquo;, up to 6.3 million times a wall, each with its own tolerance and its own misses. Work out once, exactly, which part of each face is covered, and let bevels, scars, cracks and the overhang paint read it.</li>
+      <li><b>One cell, one cut, one break.</b> The engine has nine plane clippers, three ways to write a plane and three partition makers (spines, the crack network, facet sectors). One convex cell type, in two and three dimensions, with one cut, carries all of it. &ldquo;Break a cell into cells&rdquo; then becomes a thing the design can name, repeat at a smaller size and turn to any angle, which is where the reference pictures the engine cannot reach today come from.</li>
+    </ol>
+    <p>What stays: spines and their cells, the fuzzy envelope, the five styles as settings, overlap as support, the cone over what holds a stone, every stone shaped by planes only, one seed stream per job.</p>
+    <p><b>First step:</b> a two-day spike of the surface map on today&rsquo;s stones, judged by eye beside today&rsquo;s walls. It carries most of the gain and most of the risk. The measured fallback is the program&rsquo;s own kernel, Manifold, which does today&rsquo;s job with a third of the triangles and no code of ours, at about today&rsquo;s speed.</p>
+  </div>
+  <div class="scroll"><table class="nums">
+    <tr><th></th><th class="n">Today</th><th class="n">After</th><th>Basis</th></tr>
+    <tr><td>Surface pass, Granite seed 1</td><td class="n">1,810 ms</td><td class="n">under 150 ms</td><td><span class="tag e">estimate</span> a 90-line sketch of the map takes 80 to 100 &micro;s a mark with no index; 3,939 marks</td></tr>
+    <tr><td>Triangles, Granite seed 1</td><td class="n">383,188</td><td class="n">about 107,000</td><td><span class="tag m">measured</span> Manifold&rsquo;s exact result on the same stones and cutters</td></tr>
+    <tr><td>&ldquo;Is this point in another stone?&rdquo;</td><td class="n">0.3 to 6.3 M</td><td class="n">0</td><td>cover is worked out once per face</td></tr>
+    <tr><td>Overhang paint after display</td><td class="n">19 to 617 ms</td><td class="n">read, not measured</td><td>support is decided once; the paint reads it</td></tr>
+    <tr><td>Repairs per wall</td><td class="n">8 to 75</td><td class="n">none exist</td><td>nothing is cut, welded or mended</td></tr>
+    <tr><td>A crack across a scar</td><td class="n">lost</td><td class="n">kept</td><td>running in the sketch below</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2>What it costs today</h2>
+  <p>Five walls, each built twice in one process so the crack table is warm; the second build is timed. The page&rsquo;s own surface times run about a quarter under these.</p>
+  <div class="chart">
+    <h3>Where a wall&rsquo;s time goes (ms)</h3>
+    <div class="legend" id="lg1"></div>
+    <div class="bars" id="ch1"></div>
+  </div>
+  <div class="scroll"><table class="nums">
+    <tr><th>Wall</th><th class="n">Stones</th><th class="n">Stones made</th><th class="n">Cracks traced</th><th class="n">Surface pass</th><th class="n">Paint</th><th class="n">Triangles</th><th class="n">Exact needs</th><th class="n">Scars made / tried</th><th class="n">Point asks</th></tr>
+    <tr><td>Granite 1</td><td class="n">15</td><td class="n">18 ms</td><td class="n">35 ms</td><td class="n">1,810 ms</td><td class="n">162 ms</td><td class="n">383,188</td><td class="n">106,774</td><td class="n">2,687 / 8,896</td><td class="n">0.30 M</td></tr>
+    <tr><td>Fieldstone 0</td><td class="n">443</td><td class="n">464 ms</td><td class="n">0</td><td class="n">976 ms</td><td class="n">347 ms</td><td class="n">184,396</td><td class="n">104,740</td><td class="n">2,311 / 21,609</td><td class="n">6.30 M</td></tr>
+    <tr><td>Layered 0</td><td class="n">339</td><td class="n">220 ms</td><td class="n">32 ms</td><td class="n">1,442 ms</td><td class="n">617 ms</td><td class="n">291,118</td><td class="n">111,358</td><td class="n">2,487 / 20,833</td><td class="n">4.79 M</td></tr>
+    <tr><td>Ashlar 0</td><td class="n">48</td><td class="n">26 ms</td><td class="n">20 ms</td><td class="n">743 ms</td><td class="n">175 ms</td><td class="n">183,718</td><td class="n">64,566</td><td class="n">2,377 / 10,857</td><td class="n">0.41 M</td></tr>
+    <tr><td>Columns 0</td><td class="n">16</td><td class="n">4 ms</td><td class="n">6 ms</td><td class="n">699 ms</td><td class="n">55 ms</td><td class="n">159,174</td><td class="n">52,698</td><td class="n">2,237 / 9,219</td><td class="n">0.37 M</td></tr>
+  </table></div>
+  <p class="note">&ldquo;Exact needs&rdquo; is the triangle count Manifold returns for the same stones less the same cutters. &ldquo;Point asks&rdquo; counts only the surface pass&rsquo;s tests of a point against another stone.</p>
+  <div class="chart">
+    <h3>What the eye reads, and what the engine spends</h3>
+    <div class="share">
+      <div class="bar" id="sh1"></div>
+      <div class="cap">How a cliff reads (Rock at Every Scale): form 70 to 80%, structure 15 to 25%, surface 5 to 10%. Midpoints drawn.</div>
+    </div>
+    <div class="share">
+      <div class="bar" id="sh2"></div>
+      <div class="cap">Build time over the five walls, paint left out: form about 0%, structure 11%, surface 89%.</div>
+    </div>
+    <div class="legend" id="lg2"></div>
+  </div>
+  <p>Form here is the silhouette and its masses; structure is the stones and their joints; surface is cracks, chips and scars. The engine&rsquo;s form is one box with fuzzed faces, which costs nothing because it says almost nothing.</p>
+</section>
+
+<section>
+  <h2>Findings</h2>
+  <div class="finds">
+    <div class="find">
+      <h3>Surface marks are made as volumes</h3>
+      <p>Each scar is a cone subtracted from a stone, each crack step a wedge, and the surface pass recovers the outside of what is left. The cost belongs to that way of stating the problem, not to a slow mesher: the program&rsquo;s own kernel pays the same.</p>
+      <div class="ev"><b>Evidence.</b> The page&rsquo;s mesher spends 0.31 to 0.67 ms a scar; Manifold on the same input spends 0.29 to 1.3 ms. The page emits 71 to 143 triangles a scar where the exact surface needs 24 to 45. A scar is 0.5 to 1 mm deep and tilts 7 to 12&deg; off its face.</div>
+    </div>
+    <div class="find">
+      <h3>The engine asks instead of knowing</h3>
+      <p>The outside of the wall is never made, so every stage that needs it samples it. The carve asks whether an edge is seen, holding asks what lies 0.1 mm under a face, a scar walks out from its strike point asking how much room it has, and the overhang paint tests columns on a 0.1 mm grid. Each asker has its own tolerance, so each has its own misses.</p>
+      <div class="ev"><b>Evidence.</b> 0.3 to 6.3 million point tests a wall in the surface pass alone. The paint takes 19 to 617 ms, as long as making the stones. The misses are this week&rsquo;s bug list: the bare line beside a seam, the roof over a scar&rsquo;s mouth, two floors flickering in one place (the 0.01 mm fix), &ldquo;five points missed the seen strip&rdquo;. They are one class: several paths to one fact.</div>
+    </div>
+    <div class="find">
+      <h3>Cutting a face into convex pieces is what triples the triangles</h3>
+      <p>The surface pass cuts each face into convex pieces and fans each piece alone. Neighbouring pieces then disagree about the corners on their shared edges, which is what the weld, the search for corners on edges, the fins and the gap fans exist to mend.</p>
+      <div class="ev"><b>Evidence.</b> On Granite seed 1 (before today&rsquo;s change) the pass made 173,747 triangles and then found 167,032 unmatched edges to repair. I built the map I recommend below the naive way, from convex pieces, and it fragmented just as badly: each mark leaves 5 to 6 flat faces, held as 8 to 12 pieces each. So the bloat is a property of convex pieces, in two dimensions as in three. A face must stay one polygon.</div>
+    </div>
+    <div class="find">
+      <h3>One idea, nine clippers</h3>
+      <p>&ldquo;Cut a convex thing by a plane&rdquo; is written nine times: <code>clip</code>, <code>clipS</code>, <code>cutSolid</code>, <code>clipPoly</code>, <code>clipConvex</code>, <code>cut3</code>, <code>less</code>, <code>clipBot</code>, <code>cutV</code>, beside 2D helpers for tops and bottoms drawn in plan. A plane is written three ways, a stone three ways. Each copy has its own notion of &ldquo;on the plane&rdquo;.</p>
+      <div class="ev"><b>Evidence.</b> 171 tolerance literals of 14 magnitudes, from 1e-16 to 1e-3, in the engine. A plane is a six-entry array whose last entry is a spine or one of seven magic negatives; a face&rsquo;s kind is packed into four bits of a tag. The carve takes its arguments and returns its report through 14 module-level variables.</div>
+    </div>
+    <div class="find">
+      <h3>Stages are coupled through time</h3>
+      <p>Each stage hands the next finished geometry, so each later stage must re-derive what the earlier one knew, and each earlier stage must leave room for the later one. A lower stone keeps flat patches for stones not yet made. A crack leaves whole what holds a stone. Scars had to keep off cracks, and now that they do not, a deeper scar erases the crack. A crack&rsquo;s V pieces assume a convex face, so they cannot follow a flaked one: a dozen constructions failed at that on 28 Nov.</p>
+      <div class="ev"><b>Evidence.</b> Flaking was designed five times in 46 hours. 27 Nov 08:17 paraboloid scars, lowest wins. 09:36 a field per plane, cut along ridges. 13:06 one formula, each face on a lattice (holes at joints and corners, 46 to 70 s). 28 Nov 00:26 one closed mesh, points moved (closed; 230 to 760 ms). 05:50 convex cutters and an exact pass (the look that was kept; 0.7 to 1.8 s, repairs, no cracks across scars).</div>
+    </div>
+    <div class="find">
+      <h3>Placement is by trial and refusal</h3>
+      <p>A scar is tried, tested against the rules and usually refused. The rules are the design: Flaking has about twenty constants and takes some 700 words to state. A bevel reports one of 14 reasons it was or was not made.</p>
+      <div class="ev"><b>Evidence.</b> 70 to 89% of scar attempts are refused (Fieldstone: 21,609 tried, 2,311 made). With the map, the bare patches are cells that still carry the face&rsquo;s own plane, so a pit goes where one is, with no grid of samples: the sketch covers a face to under 1% bare that way.</div>
+    </div>
+    <div class="find">
+      <h3>Three partitions that do not know they are one</h3>
+      <p>Spines make cells that become stones. The crack network makes cells whose boundaries become cracks. Faceting makes sectors of a face. Each has its own code and its own words: Direction, Reach, Width, Thickness, Order and Wander for one; Network, Spacing and Planes, Columns or Blocks for another. One meaning, several words.</p>
+      <div class="ev"><b>Evidence.</b> Cliff Cleaving (18 Nov) already named the single idea, a volume cut by families of planes at several sizes, and the two best walls of that week (O v14, N v13) came from cutting the same families again inside each cell at 0.6 and 0.4 of the spacing. Spines kept one size.</div>
+    </div>
+    <div class="find">
+      <h3>Form cannot be said</h3>
+      <p>The envelope is one box. Direction has three values. So a dip slope (reference N), a 60&deg; set (D), spires leaning to a point (P), masses stepping back, a lintel or a buttress cannot be asked for, whatever the settings. The page lists most of these under &ldquo;Not here yet&rdquo;.</p>
+      <div class="ev"><b>Evidence.</b> The same study says a wall reads from 1 to 5 masses and &ldquo;a few dozen pieces, not hundreds&rdquo;, and that variety comes &ldquo;from where pieces start and stop, not from their angles&rdquo;. Fieldstone has 443 stones and about 2,300 scars.</div>
+    </div>
+    <div class="find">
+      <h3>Today&rsquo;s cracks break the project&rsquo;s own crack rules</h3>
+      <p>A free crack end tapers out in the middle of a face. A crack is 0.2 to 0.6 mm wide and 0.14 to 0.42 mm deep. The earlier study asks for cracks that run edge to edge or end on another crack, at least 0.4 mm wide and deep, often with one side standing proud.</p>
+      <div class="ev"><b>Evidence.</b> Rock at Every Scale: &ldquo;never in the middle of a face&rdquo;; short scratches &ldquo;read as gouges&rdquo;; nothing under 0.4 mm prints. A crack that is the opened boundary between two cells meets all three by construction.</div>
+    </div>
+    <div class="find">
+      <h3>The prototype became the product, in a second language</h3>
+      <p>The page grew its own geometry kernel, its own exact mesher and its own overhang measure. The Rust program already has all three (Manifold, the audit gate), and every line of the page must be written again there. The by-construction rule calls a second path the defect.</p>
+      <div class="ev"><b>Evidence.</b> 3,808 lines, 417 KB. The engine is 2,028 lines; <code>wall</code> alone is 514 lines and 59 KB, one closure over a &ldquo;current stone&rdquo; held in shared registers (<code>initBox</code>, <code>clip</code>, <code>snap</code>, <code>restore</code>). One function was split out only because &ldquo;<code>wall</code> is past the size V8 will optimize&rdquo;.</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Today&rsquo;s pipeline, and what each stage has to ask</h2>
+  <div class="scroll"><div class="pipe">
+    <div class="stage"><div class="k">1</div><div class="t">Spines, cells</div>Layers, darts, the plane halfway to each neighbour.<div class="knows">Knows every neighbour.</div></div>
+    <div class="stage"><div class="k">2</div><div class="t">Masses</div>Bottoms lowered onto the tops under them, sampled each mm.<div class="ask">Asks: what is under this bottom, within 1.2 mm?</div></div>
+    <div class="stage"><div class="k">3</div><div class="t">Stones</div>Round, hold, flare, bevel, facet, weather, bottom up.<div class="ask">Asks: is this edge seen? what lies 0.1 mm under this face? what must I keep for the stone above?</div></div>
+    <div class="stage"><div class="k">4</div><div class="t">Cracks</div>A second partition, traced on faces, cut as V pieces.<div class="ask">Asks: is this face the wall&rsquo;s outside? does this stretch hold a stone?</div></div>
+    <div class="stage"><div class="k">5</div><div class="t">Flaking</div>Cones struck, fitted, refused.<div class="ask">Asks: does a stone rise over this mouth? how much room? is this patch bare? which neighbours does it reach?</div></div>
+    <div class="stage"><div class="k">6</div><div class="t">Surface pass</div>Stone less cutters, piece by piece, then mended.<div class="ask">Asks: which corners lie on which edges?</div></div>
+    <div class="stage"><div class="k">7</div><div class="t">Paint</div>Every downward face, column by column.<div class="ask">Asks all of it again: what holds this?</div></div>
+  </div></div>
+</section>
+
+<section>
+  <h2>Options</h2>
+
+  <h3>A. How the surface is made</h3>
+  <div class="scroll"><table>
+    <tr><th>Option</th><th>What it is</th><th>Numbers</th><th>For</th><th>Against</th></tr>
+    <tr><td>A1. Keep</td><td>Cutters, the page&rsquo;s mesher, repairs</td><td>699 to 1,810 ms; 159k to 383k triangles <span class="tag m">measured</span></td><td>The look is settled</td><td>Each speed-up risks closure; cracks cannot cross scars</td></tr>
+    <tr><td>A2. Manifold</td><td>The same cutters, taken out by the program&rsquo;s kernel</td><td>680 to 3,545 ms in WASM on one thread; 53k to 111k triangles; one watertight solid in 1.2 to 2.7 s <span class="tag m">measured</span>; native with threads perhaps 3 to 6 times faster <span class="tag e">estimate</span></td><td>No mesher of ours; the same look; a third of the triangles; never open</td><td>No faster in a browser; scars are still tried and refused; cracks still cannot follow scars</td></tr>
+    <tr><td>A3. Our mesher, rebuilt</td><td>One map per plane, corners named by their three planes, edges merged line by line</td><td>3 to 5 times faster, a third of the triangles <span class="tag e">estimate</span></td><td>The same look, exact</td><td>Still volumes; a kernel to own; cracks stay pieces</td></tr>
+    <tr><td>A4. Fields on a closed mesh</td><td>Built 28 Nov: points moved, creases found by solving</td><td>230 to 760 ms <span class="tag m">measured then</span></td><td>Closed by construction</td><td>Creases are found, not placed; replaced an hour later by struck scars</td></tr>
+    <tr class="pick"><td>A5. The surface map</td><td>Each face a flat map of polygons, one plane each; a scar lowers it, a crack grooves it</td><td>80 to 100 &micro;s a mark in a naive sketch <span class="tag m">measured</span>; whole faces and an index should bring a wall under 150 ms <span class="tag e">estimate</span></td><td>In a face, the same surface as A2; closed and ordered by construction; cracks follow scars; bare patches are known</td><td>New code; where two faces meet needs one stated rule; the look there must be shown</td></tr>
+  </table></div>
+  <p>A2 is the important measurement. It says a general, well-made kernel does not beat the page&rsquo;s hand-written one on this problem, so more mesher work cannot be the answer; the problem has to be stated differently. It also gives the fallback: in Rust, today&rsquo;s whole surface pass is two calls.</p>
+
+  <h3>B. How a stage learns what is outside</h3>
+  <div class="scroll"><table>
+    <tr><th>Option</th><th>What it is</th><th>For</th><th>Against</th></tr>
+    <tr><td>B1. Keep</td><td>Point tests, each stage its own</td><td>Nothing to build</td><td>Finding 2</td></tr>
+    <tr><td>B2. Union first</td><td>Manifold joins the stones (8 to 838 ms in WASM); stages read the solid&rsquo;s faces</td><td>Exact; one solid for the slicer</td><td>Slow on Fieldstone; stones stop being separate things to tap and report on</td></tr>
+    <tr class="pick"><td>B3. Cover by section</td><td>For each face: the other stones cut by its plane are convex polygons; laid on the face&rsquo;s map, they mark what is covered</td><td>Exact, local, the same cell and cut as everything else; stones stay stones</td><td>Coplanar faces of two stones need an owner (one rule, where today there is a 0.01 mm offset)</td></tr>
+  </table></div>
+
+  <h3>C. The model</h3>
+  <div class="scroll"><table>
+    <tr><th>Option</th><th>What it is</th><th>For</th><th>Against</th></tr>
+    <tr><td>C1. Spines only</td><td>Today</td><td>Known; five styles work</td><td>Finding 8: one box, three directions, one size</td></tr>
+    <tr><td>C2. Cleaving only</td><td>One volume cut by families of planes (Cliff Cleaving)</td><td>Ten words cover fifteen references</td><td>Never built; loses Fieldstone&rsquo;s thrown stones</td></tr>
+    <tr class="pick"><td>C3. Break as a kind</td><td>A break turns a cell into cells. Spines are one maker of breaks, plane families another. A break can be applied again inside its own cells, smaller</td><td>Keeps spines; adds tilted and leaning sets, nested sizes, masses; cracks become opened boundaries of a break</td><td>New words; needs Shawn and Orin; nested sizes have read as rubble when the offsets were large</td></tr>
+  </table></div>
+
+  <h3>D. Support</h3>
+  <div class="scroll"><table>
+    <tr><th>Option</th><th>What it is</th><th>For</th><th>Against</th></tr>
+    <tr><td>D1. Keep</td><td>Lower by sampling, hold by clipping faces against stones moved up 0.1 mm, flare, keeps</td><td>Passes the gate; many rounds of tuning in it</td><td>About 300 lines and six constants for an idea that is three steps</td></tr>
+    <tr class="pick"><td>D2. The same idea, on volumes</td><td>A stone is held where it overlaps a held stone (a convex cell); the hull of those places; the cone over the hull; cut the stone to the cone</td><td>Three kernel calls; no moved-up planes; the paint reads the same answer</td><td>Lateral overlap now counts, which is true of a print but changes some flares; needs the seven-wall check</td></tr>
+    <tr><td>D3. Skin wall, stone library</td><td>From the speed page</td><td>Milliseconds</td><td>Tried at length: reads as cobbles or rubble</td></tr>
+  </table></div>
+
+  <h3>E. One solid or shells</h3>
+  <p>Stay with shells in the page: Bambu Studio fuses them, and a stone stays a thing with a page of its own. In the program, where the gate still asks for one watertight body, the union of today&rsquo;s flaked shells costs 167 to 1,911 ms in WASM on one thread <span class="tag m">measured</span>. With a third of the triangles going in, that falls with them.</p>
+
+  <h3>F. Where the code lives</h3>
+  <div class="scroll"><table>
+    <tr><th>Option</th><th>What it is</th><th>For</th><th>Against</th></tr>
+    <tr><td>F1. Page, then port</td><td>Today&rsquo;s way</td><td>Instant reload while the look moves</td><td>Everything is built twice; the page already holds a second kernel, mesher and gate</td></tr>
+    <tr class="pick"><td>F2. Spike in the page, build in Rust</td><td>Prove the surface map on a copy of the page; write the rewrite once, as the cliff element; the page becomes its explorer on the WASM engine</td><td>One implementation; the gate, the union and the hashes are the program&rsquo;s</td><td>The loop is a build, not a reload; the explorer needs the WASM bundle to be quick to make</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2>The design I would build</h2>
+  <p>Three kinds and a short list of verbs. Everything the engine does today is one of them.</p>
+  <dl>
+    <dt>Cell</dt><dd>A convex region written as its half-spaces: lines in a face, planes in the wall. One verb, <b>cut</b>. From it: meet (join two lists), section (a 3D cell cut by a plane is a 2D cell), grow and shrink (move the planes), the cone over a cell.</dd>
+    <dt>Break</dt><dd>A cell turned into cells. Spines make one, a family of planes makes one, strike points on a face make one.</dd>
+    <dt>Map</dt><dd>One face&rsquo;s surface: polygons that share their edges, each with one plane, a height over the face. Three verbs. <b>Cover</b> marks what another stone hides. <b>Lower</b> takes a bowl and keeps the deeper of the surface and the bowl. <b>Groove</b> sinks a V along a line into whatever surface is there. No verbs, and the map is the flat face.</dd>
+  </dl>
+  <div class="scroll"><div class="pipe">
+    <div class="stage"><div class="k">1</div><div class="t">Break</div>Envelope into stones: spines, as now, as Cells.<div class="knows">Gives: every stone and neighbour.</div></div>
+    <div class="stage"><div class="k">2</div><div class="t">Hold</div>Bottom up: overlap, hull, cone, cut.<div class="knows">Gives: what holds what, once. The paint reads this.</div></div>
+    <div class="stage"><div class="k">3</div><div class="t">Shape</div>Planes only: bevel, round, facet, weather.<div class="knows">Gives: a convex stone.</div></div>
+    <div class="stage"><div class="k">4</div><div class="t">Cover</div>Each face&rsquo;s map, with the other stones&rsquo; sections laid on it.<div class="knows">Gives: what is outside, exactly. Seen edges come from the same sections.</div></div>
+    <div class="stage"><div class="k">5</div><div class="t">Mark</div>Lower for scars and pits, groove for cracks, in the order written.<div class="knows">Gives: the finished surface. Nothing is refused for lack of room: a bowl is clipped by the map.</div></div>
+    <div class="stage"><div class="k">6</div><div class="t">Emit</div>Each polygon triangulated; faces share edge points.<div class="knows">Closed. Nothing to mend.</div></div>
+  </div></div>
+
+  <h3>A sketch of the map, running</h3>
+  <div class="sketch">
+    <canvas id="cv" width="1200" height="720" aria-label="One 30 by 18 mm face seen from above, lit from the top left: flake scars struck from its edges, pits where it was bare, and a crack across them"></canvas>
+    <div class="ctl">
+      <button id="b-flat">Flat face</button>
+      <button id="b-strike">Strike the edges</button>
+      <button id="b-cover">Pit the bare patches</button>
+      <button id="b-crack">Cut a crack</button>
+      <label class="chk"><input type="checkbox" id="c-cells"> Show the pieces</label>
+    </div>
+    <div class="stat" id="stat"></div>
+    <p class="note">One 30 by 18 mm face from above, lit from the top left. The scars are today&rsquo;s: a point under the edge, five planes rising 7 to 12&deg; across the face, three generations. This sketch is 90 lines and holds each flat face as convex pieces, so it fragments, as finding 3 says; the real map keeps a face whole. It has no index either, so its time grows with the square of the marks.</p>
+  </div>
+  <p>What the sketch shows. The surface is a partition: the pieces&rsquo; areas sum to the face exactly. A bowl is never refused for lack of room, since it is clipped by what is there. Bare patches are read off the map. And the crack crosses every scar at its own depth and width, because in each piece the strip either side of the line takes that piece&rsquo;s own plane, lowered at the line. That is the thing a dozen 3D constructions could not do.</p>
+
+  <h3>Where two faces meet</h3>
+  <p>This is the one place the map is a new definition rather than the old surface made another way. Both faces&rsquo; maps end on the same points along their shared edge, and each such point sits as deep under each face as that face&rsquo;s map says there (two planes, one point; three at a corner). An edge strike lowers both faces from one point on the edge: the long scar on one, the notch on the other. Across the edge the result is close to today&rsquo;s cone, not identical. The spike has to show it reads as well.</p>
+
+  <h3>What each feature becomes</h3>
+  <div class="scroll"><table>
+    <tr><th>Today</th><th>Becomes</th></tr>
+    <tr><td>Spines, cells, Joint, Fuse</td><td>A break of the envelope; unchanged in meaning</td></tr>
+    <tr><td>Lowering, holding, flare, keeps</td><td>Hold: overlap, hull, cone. Keeps go if a stone may sink onto what is there</td></tr>
+    <tr><td>Bevel, Round, Faceting, Weathering</td><td>Cuts of the stone&rsquo;s cell, as now, with &ldquo;seen&rdquo; read from the sections</td></tr>
+    <tr><td>Crack network</td><td>A break of space; its sections by a face are lines on that face&rsquo;s map</td></tr>
+    <tr><td>Crack traces, walk, V pieces, held stretches</td><td>Groove along those lines. Covered polygons are skipped</td></tr>
+    <tr><td>Scars, growth, pits, room, held tests</td><td>Lower, with the same bowls; pits go in polygons that still carry the face&rsquo;s plane</td></tr>
+    <tr><td>Scars that chip a neighbour; the 0.01 mm offset</td><td>Each stone marks its own faces where they are within a scar&rsquo;s depth of open; a coplanar overlap has one owner</td></tr>
+    <tr><td>Surface pass, weld, T-junctions, mend</td><td>Emit</td></tr>
+    <tr><td>Overhang paint by columns</td><td>Read from Hold and from each plane as it is assigned; the program&rsquo;s audit stays the independent check</td></tr>
+  </table></div>
+
+  <h3>What it promises, by construction</h3>
+  <ul>
+    <li><b>Closed.</b> A map&rsquo;s polygons share their edges; two faces share their edge points. Nothing is cut, welded or mended, so there is no step at which a seam can open.</li>
+    <li><b>Printable.</b> One check, in one place: when a plane is given to a polygon, it may not face down past 55&deg;; if it would, the mark is laid flatter. Support is decided once, in Hold.</li>
+    <li><b>Zero is identity.</b> A stage that lowers nothing leaves the map as it was, polygon for polygon.</li>
+    <li><b>Order is what is written.</b> Flaking then cracks means the cracks cut the flaked surface. The other order means scars cross cracks.</li>
+    <li><b>One answer to &ldquo;what is outside&rdquo;.</b> Bevels, scars, cracks and paint read the same covered polygons.</li>
+  </ul>
+
+  <h3>What it opens</h3>
+  <p>These are not needed for the rewrite, and each needs its words agreed first. A bowl with a flat floor over one cell of a coarser break is a step: a block set back, &ldquo;one side standing proud&rdquo;. A groove along every boundary of that break is a crack that runs edge to edge or ends on another crack. The same break applied again at 0.6 of its spacing is the nested size the best earlier walls had. A break made by plane families takes a dip and a facing, which reaches the dip slope and the leaning spires. An envelope that is itself a few cells gives masses.</p>
+
+  <div class="box">
+    <h3 style="margin-top:0">Language check</h3>
+    <ul>
+      <li><b>Words:</b> the rewrite (steps 0 to 3 below) adds, renames or removes no control. Inside the code: cell, cut, break, map, cover, lower, groove, hold. &ldquo;Break&rdquo; is new and would need a registry row if it ever reaches the tile language; &ldquo;cleave&rdquo; is the earlier word for the plane-family maker and was ruled a kind by Orin on 18 Nov.</li>
+      <li><b>Kinds:</b> three (cell, break, map) where today there are about a dozen (piece, mass, body, joiner, guard, top, rest patch, cutter, trace, chain, step, scar, pit). A stone is a cell with a map on each face.</li>
+      <li><b>Kernel:</b> cut a cell by a half-space. Every other operation reduces to it.</li>
+      <li><b>Second paths removed:</b> nine clippers to one; support decided once and painted from it; what is outside decided once; the page&rsquo;s kernel, mesher and measure against the program&rsquo;s.</li>
+      <li><b>One meaning, several words (open, needs Shawn):</b> Direction, Reach, Width, Thickness for stones against Network and Spacing for cracks. Both describe a break.</li>
+      <li><b>Holes closed:</b> a crack on a scar; a scar at a seam; a stage at zero.</li>
+      <li><b>Review:</b> this page has not been to Orin. Step 4 adds words and goes there before it is built.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>What I would not change</h2>
+  <ul>
+    <li><b>Spines.</b> A stone as the cell of its spine is a good, small model, and five styles fall out of its settings.</li>
+    <li><b>Planes only, for the stone.</b> Bevel, Round, Faceting and Weathering as cuts keep the stone convex and its printability a one-line check.</li>
+    <li><b>The cone over what holds a stone,</b> the flare that is also the bottom bevel, and overlap as support. The idea is right; only its statement is long.</li>
+    <li><b>The fuzzy envelope</b> drawn from smooth fields, ranges for every drawn setting, and one seed stream per job.</li>
+    <li><b>Shells, not a union,</b> in the page; and a stone as a thing with a page.</li>
+    <li><b>The scar itself:</b> the cone with its point under the edge, the long shallow side, the notch behind, the growth from rims. The map lowers by the same bowls.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Risks</h2>
+  <ul>
+    <li><b>The look at stone edges.</b> The rule above is new there, and edges are where scars are struck. This is why the spike comes first and is judged by eye.</li>
+    <li><b>Keeping faces whole.</b> The sketch shows the easy version fragments. The real map needs polygon difference and a shared edge structure: more code than the sketch, and the part most likely to grow. Its floor is known: Manifold&rsquo;s counts.</li>
+    <li><b>Floats.</b> A map is cut by lines computed in floats. Corners are made once and shared, so nothing is welded, but a cut that passes within a hair of a corner must be told to use it. That is one tolerance, in one function.</li>
+    <li><b>Support on volumes</b> will not match today&rsquo;s flares wall for wall. It should be held to the seven-wall check and Shawn&rsquo;s cameras before the old chain goes.</li>
+    <li><b>The loop in Rust.</b> A look round that was a reload becomes a build. Keep the page for look spikes; keep the element for everything settled.</li>
+    <li><b>Nested sizes</b> have read as rubble, shingles or crystal when the offsets or tilts were large (Weathered Stone, Wall O). They are an opening, not part of the rewrite.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Plan</h2>
+  <ol>
+    <li value="0"><b>Spike the map</b> on a copy of the page, in place of the surface pass: cover, lower, groove, emit, and the edge rule, with faces kept whole. Two days. It passes if all seven walls are closed by index, red is no worse, a wall&rsquo;s surface is under 150 ms, triangles are within a quarter of Manifold&rsquo;s counts, and the renders at Shawn&rsquo;s cameras read at least as well as today&rsquo;s. If the edges do not read, fall back to A2 in Rust and keep the map for cracks only.</li>
+    <li><b>Cover replaces the asks:</b> the bevel&rsquo;s seen test, the scar&rsquo;s room and held tests, and the paint all read the sections. Each wall&rsquo;s red and seen-edge counts are compared with today&rsquo;s.</li>
+    <li><b>One Cell</b> through spines, holding and the carve, written in Rust as the cliff element (<code>dt-geom</code> for the cell and the map, <code>dt-elements</code> for the stages). The page stays as the oracle: same seed, same stones, compared by volume and by render.</li>
+    <li><b>Hold on volumes;</b> the paint reads it; the program&rsquo;s audit is the independent check. The page becomes the element&rsquo;s explorer.</li>
+    <li><b>Break as a kind</b> (needs words, Shawn and Orin first): plane families with dip and facing, a second size, cracks as opened boundaries, an envelope of masses.</li>
+  </ol>
+  <p>Each step lands on the seven-wall check and a contact sheet, and can be the last one taken.</p>
+</section>
+
+<section>
+  <h2>How this was measured</h2>
+  <ul>
+    <li><b>Stage times, triangles, scars, asks:</b> the engine run in Node from the page&rsquo;s own script, each wall built twice, the second timed. Commit a06fd433.</li>
+    <li><b>Manifold:</b> <code>manifold-3d</code> 3.5.5 (WASM, one thread). Each stone and each cutter as the hull of its corners, from a hook in the surface pass; every result forced before the clock stops. All results valid.</li>
+    <li><b>The sketch:</b> the 90 lines running above. In Node: a 20 by 12 mm face, 91 marks in 9 ms; an 8 by 6 mm face, 28 marks in 2.2 ms; a crack across either, 0.3 to 1.4 ms.</li>
+    <li><b>Census:</b> counted from the file: tolerance literals, clippers, module variables, function sizes.</li>
+    <li><b>History:</b> the 222 commits to the page, 21 to 28 Nov.</li>
+    <li><b>Earlier pages:</b> Cliffs from Scratch and Cliffs: speed ideas read in full; Cliff Cleaving, Rock at Every Scale, Stone and Courses (decisions), Weathered Stone, Blocky Cliffs, Wall O and Wall N read by a helper and digested.</li>
+  </ul>
+  <div class="scroll"><table class="nums">
+    <tr><th>Manifold, WASM, one thread</th><th class="n">Page&rsquo;s pass</th><th class="n">Same job (shells)</th><th class="n">Union of stones</th><th class="n">Union of cutters</th><th class="n">Subtract</th><th class="n">One solid</th><th class="n">Union of flaked shells</th></tr>
+    <tr><td>Granite 1</td><td class="n">1,882 ms</td><td class="n">3,545 ms</td><td class="n">12 ms</td><td class="n">1,857 ms</td><td class="n">175 ms</td><td class="n">62,046 tris</td><td class="n">1,911 ms</td></tr>
+    <tr><td>Fieldstone 0</td><td class="n">950 ms</td><td class="n">680 ms</td><td class="n">838 ms</td><td class="n">413 ms</td><td class="n">477 ms</td><td class="n">82,602 tris</td><td class="n">1,289 ms</td></tr>
+    <tr><td>Layered 0</td><td class="n">1,537 ms</td><td class="n">2,589 ms</td><td class="n">415 ms</td><td class="n">1,739 ms</td><td class="n">585 ms</td><td class="n">93,694 tris</td><td class="n">1,776 ms</td></tr>
+    <tr><td>Ashlar 0</td><td class="n">765 ms</td><td class="n">1,166 ms</td><td class="n">30 ms</td><td class="n">1,275 ms</td><td class="n">357 ms</td><td class="n">67,014 tris</td><td class="n">201 ms</td></tr>
+    <tr><td>Columns 0</td><td class="n">783 ms</td><td class="n">967 ms</td><td class="n">8 ms</td><td class="n">953 ms</td><td class="n">243 ms</td><td class="n">53,894 tris</td><td class="n">167 ms</td></tr>
+  </table></div>
+</section>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+/* ---------- charts ---------- */
+(() => {
+  const S = [['Stones made', '--s1'], ['Cracks traced', '--s2'], ['Surface pass', '--s3'], ['Overhang paint', '--s4']];
+  const D = [['Granite 1', [18, 35, 1810, 162]], ['Fieldstone 0', [464, 0, 976, 347]], ['Layered 0', [220, 32, 1442, 617]], ['Ashlar 0', [26, 20, 743, 175]], ['Columns 0', [4, 6, 699, 55]]];
+  const max = Math.max(...D.map(d => d[1].reduce((a, b) => a + b, 0)));
+  const lg = (el, items) => { el.innerHTML = items.map(([n, c]) => `<span><i style="background:var(${c})"></i>${n}</span>`).join(''); };
+  lg(document.getElementById('lg1'), S);
+  const ch = document.getElementById('ch1');
+  for (const [name, v] of D) { const tot = v.reduce((a, b) => a + b, 0);
+    ch.insertAdjacentHTML('beforeend', `<div class="lab">${name}</div><div class="bar" style="width:${(100 * tot / max).toFixed(1)}%">${v.map((x, i) => x ? `<span style="flex:${x} 0 0;background:var(${S[i][1]})" data-tip="${name}: ${S[i][0].toLowerCase()} ${x.toLocaleString('en')} ms (${Math.round(100 * x / tot)}%)"></span>` : '').join('')}</div><div class="tot">${tot.toLocaleString('en')}</div>`); }
+  const L = [['Form', '--s1'], ['Structure', '--s2'], ['Surface', '--s3']];
+  const share = (el, v, what) => { el.innerHTML = v.map((x, i) => x > 0 ? `<span style="flex:${x} 0 0;background:var(${L[i][1]})" data-tip="${what}: ${L[i][0].toLowerCase()} ${x}%"></span>` : '').join(''); };
+  share(document.getElementById('sh1'), [75, 20, 5], 'How it reads'); share(document.getElementById('sh2'), [0, 11, 89], 'Build time'); lg(document.getElementById('lg2'), L);
+  const tip = document.getElementById('tip');
+  document.addEventListener('pointermove', e => { const t = e.target.closest && e.target.closest('[data-tip]'); if (!t) { tip.hidden = true; return; } tip.textContent = t.dataset.tip; tip.hidden = false;
+    const w = tip.offsetWidth, x = Math.min(window.innerWidth - w - 8, Math.max(8, e.clientX + 12)); tip.style.left = x + 'px'; tip.style.top = (e.clientY + 14) + 'px'; });
+  document.addEventListener('pointerleave', () => { tip.hidden = true; });
+})();
+
+/* ---------- the map, sketched ----------
+   A face as convex pieces, each with one plane z = a u + b v + c (z the height over the face: 0 the face, down negative).
+   lower keeps the deeper of the surface and a bowl; groove sinks a V along a line into whatever is there. */
+const Relief = (() => {
+  const clipHalf = (p, A, B, C) => { const o = []; for (let i = 0, m = p.length; i < m; i++) { const u = p[i], v = p[(i + 1) % m], du = A * u[0] + B * u[1] + C, dv = A * v[0] + B * v[1] + C;
+      if (du <= 0) o.push(u); if ((du < 0 && dv > 0) || (du > 0 && dv < 0)) { const t = du / (du - dv); o.push([u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t]); } } return o.length >= 3 ? o : null; };
+  const area = p => { let a = 0; for (let i = 0, m = p.length; i < m; i++) { const q = p[(i + 1) % m]; a += p[i][0] * q[1] - q[0] * p[i][1]; } return a / 2; };
+  const boxOf = p => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const v of p) { if (v[0] < x0) x0 = v[0]; if (v[0] > x1) x1 = v[0]; if (v[1] < y0) y0 = v[1]; if (v[1] > y1) y1 = v[1]; } return [x0, x1, y0, y1]; };
+  const TINY = 1e-6, cell = (p, g) => ({ p, g, b: boxOf(p) }); let nid = 1; const BASE = [0, 0, 0]; BASE.id = 0; const wallIds = new Map();
+  const make = (W, H) => ({ W, H, cells: [cell([[0, 0], [W, 0], [W, H], [0, H]], BASE)], marks: 0, grooves: 0 });
+  /* in a piece with plane g, the bowl (the highest of its planes F) lies under the surface inside the lines F_i = g: a convex part. What is left of the
+     piece is cut off outside each line in turn; the part is shared out to whichever plane is highest on it */
+  const lower = (M, F, box) => { const out = [];
+    for (const c of M.cells) { const b = c.b; if (box && (b[0] > box[1] || b[1] < box[0] || b[2] > box[3] || b[3] < box[2])) { out.push(c); continue; }
+      const g = c.g; let Q = c.p; for (const f of F) { Q = clipHalf(Q, f[0] - g[0], f[1] - g[1], f[2] - g[2]); if (!Q) break; }
+      if (!Q || area(Q) < TINY) { out.push(c); continue; }
+      let R = c.p; for (const f of F) { const o = clipHalf(R, g[0] - f[0], g[1] - f[1], g[2] - f[2]); if (o && area(o) > TINY) out.push(cell(o, g)); R = clipHalf(R, f[0] - g[0], f[1] - g[1], f[2] - g[2]); if (!R) break; }
+      for (let i = 0; i < F.length; i++) { let S = Q; const fi = F[i]; for (let j = 0; j < F.length && S; j++) if (j !== i) { const fj = F[j]; S = clipHalf(S, fj[0] - fi[0], fj[1] - fi[1], fj[2] - fi[2]); }
+        if (S && area(S) > TINY) out.push(cell(S, fi)); } }
+    M.cells = out; M.marks++; };
+  /* a struck scar's bowl: its point d under E, floor planes rising from it along directions round it; a reach r along a direction gives the slope d / r */
+  const bowl = (E, t, d, rnd, pit) => { const e = [t[1], -t[0]], W2 = d * (4 + 2 * rnd()) / 2, Lf = d / Math.tan((7 + 5 * rnd()) * Math.PI / 180), Lb = d / Math.tan((25 + 15 * rnd()) * Math.PI / 180), F = [], dirs = [];
+    if (pit) for (let i = 0; i < 7; i++) dirs.push(i * 360 / 7); else { for (let i = 0; i < 5; i++) dirs.push(i * 45); dirs.push(240, 300); }
+    let reach = 0; for (const ph0 of dirs) { const ph = (ph0 + (2 * rnd() - 1) * 10) * Math.PI / 180, c = Math.cos(ph), s = Math.sin(ph), Lr = s >= 0 || pit ? Lf : Lb, r = (0.85 + 0.3 * rnd()) / Math.sqrt((c / W2) ** 2 + (s / Lr) ** 2), k = d / r, ux = e[0] * c + t[0] * s, uy = e[1] * c + t[1] * s;
+      const f = [k * ux, k * uy, -d - k * (ux * E[0] + uy * E[1])]; f.id = nid++; F.push(f); if (r > reach) reach = r; }
+    return { F, box: [E[0] - reach, E[0] + reach, E[1] - reach, E[1] + reach], Lf, W2 }; };
+  /* a V of half-width w and depth D along the polyline P: in each piece the strip either side of the line takes the piece's own plane, lowered by D at
+     the line and by nothing at the lips, which is a plane again; steps meet on the line that halves their turn */
+  const groove = (M, P, w, D) => { const G = M.grooves++, wall = (g, i, sd, v) => { const key = g.id + '|' + G + '|' + i + '|' + sd; let id = wallIds.get(key); if (!id) wallIds.set(key, id = nid++); v.id = id; return v; };
+    for (let i = 0; i + 1 < P.length; i++) { const A = P[i], B = P[i + 1], L = Math.hypot(B[0] - A[0], B[1] - A[1]), a = [(B[0] - A[0]) / L, (B[1] - A[1]) / L], n = [-a[1], a[0]];
+      const bis = (prev, next, at, sign) => { let m = prev && next ? [prev[0] + next[0], prev[1] + next[1]] : (prev || next); const l = Math.hypot(m[0], m[1]); m = [m[0] / l, m[1] / l]; return [sign * m[0], sign * m[1], -sign * (m[0] * at[0] + m[1] * at[1])]; };
+      const dirOf = k => { const U = P[k], V = P[k + 1], l = Math.hypot(V[0] - U[0], V[1] - U[1]); return [(V[0] - U[0]) / l, (V[1] - U[1]) / l]; };
+      const h0 = bis(i > 0 ? dirOf(i - 1) : null, a, A, -1), h1 = bis(a, i + 2 < P.length ? dirOf(i + 1) : null, B, 1);
+      const dn = -(n[0] * A[0] + n[1] * A[1]), k = D / w, out = [], bx = [Math.min(A[0], B[0]) - 2 * w, Math.max(A[0], B[0]) + 2 * w, Math.min(A[1], B[1]) - 2 * w, Math.max(A[1], B[1]) + 2 * w];
+      for (const c of M.cells) { const b = c.b; if (b[0] > bx[1] || b[1] < bx[0] || b[2] > bx[3] || b[3] < bx[2]) { out.push(c); continue; }
+        let R = c.p; const g = c.g, keep = (A_, B_, C_) => { const o = clipHalf(R, -A_, -B_, -C_); if (o && area(o) > TINY) out.push(cell(o, g)); R = R && clipHalf(R, A_, B_, C_); };
+        keep(h0[0], h0[1], h0[2]); if (R) keep(h1[0], h1[1], h1[2]); if (R) keep(n[0], n[1], dn - w); if (R) keep(-n[0], -n[1], -dn - w);
+        if (!R) continue; const l = clipHalf(R, -n[0], -n[1], -dn), r = clipHalf(R, n[0], n[1], dn);
+        if (l && area(l) > TINY) out.push(cell(l, wall(g, i, 1, [g[0] + k * n[0], g[1] + k * n[1], g[2] - D + k * dn])));
+        if (r && area(r) > TINY) out.push(cell(r, wall(g, i, 0, [g[0] - k * n[0], g[1] - k * n[1], g[2] - D - k * dn]))); }
+      M.cells = out; } M.marks++; };
+  const bare = M => M.cells.filter(c => c.g.id === 0), faces = M => new Set(M.cells.map(c => c.g.id)).size;
+  const tris = M => { let t = 0; for (const c of M.cells) t += c.p.length - 2; return t; };
+  return { make, lower, bowl, groove, bare, tris, area, faces };
+})();
+
+(() => {
+  const R = Relief, W = 30, H = 18, cv = document.getElementById('cv'), cx = cv.getContext('2d'), stat = document.getElementById('stat'), showCells = document.getElementById('c-cells');
+  const rng = s => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  let M, rnd, struck, pits, cracks, last;
+  const reset = () => { M = R.make(W, H); rnd = rng(7); struck = 0; pits = 0; cracks = 0; last = 0; };
+  const strikeEdges = () => { const t0 = performance.now();
+    const strike = (E, t, d, gen) => { const b = R.bowl(E, t, d, rnd, false); R.lower(M, b.F, b.box); struck++;
+      if (gen < 3 && rnd() < 0.75) { const e = [t[1], -t[0]], s = (rnd() - 0.5) * b.W2, E2 = [E[0] + t[0] * 0.75 * b.Lf + e[0] * s, E[1] + t[1] * 0.75 * b.Lf + e[1] * s]; if (E2[0] > 0 && E2[0] < W && E2[1] > 0 && E2[1] < H) strike(E2, t, 0.7 * d, gen + 1); } };
+    for (const [O, e, t, L] of [[[0, 0], [1, 0], [0, 1], W], [[W, 0], [0, 1], [-1, 0], H], [[W, H], [-1, 0], [0, -1], W], [[0, H], [0, -1], [1, 0], H]])
+      for (let s = 0.5; s < L;) { const d = 0.5 + 0.5 * rnd(); strike([O[0] + e[0] * s, O[1] + e[1] * s], t, d, 0); s += 0.6 * d * 5 * (0.8 + 0.4 * rnd()); }
+    last = performance.now() - t0; };
+  const pitBare = () => { const t0 = performance.now();
+    for (let pass = 0; pass < 6; pass++) { const B = R.bare(M).filter(c => R.area(c.p) > 0.25); if (!B.length) break;
+      for (const c of B) { let x = 0, y = 0; for (const v of c.p) { x += v[0]; y += v[1]; } const a = 6.283 * rnd(), b = R.bowl([x / c.p.length, y / c.p.length], [Math.cos(a), Math.sin(a)], 0.5 * (0.5 + 0.5 * rnd()), rnd, true); R.lower(M, b.F, b.box); pits++; } }
+    last = performance.now() - t0; };
+  const crack = () => { const t0 = performance.now(), y0 = H * (0.2 + 0.6 * rnd()), P = [[-1, y0]]; let x = 0, y = y0;
+    while (x < W) { x += 3 + 4 * rnd(); y = Math.min(H - 1, Math.max(1, y + (rnd() - 0.5) * 5)); P.push([Math.min(x, W + 1), y]); }
+    R.groove(M, P, 0.22, 0.4); cracks++; last = performance.now() - t0; };
+  const draw = () => { const k = cv.width / W, Lx = -0.5, Ly = -0.56, Lz = 0.66; cx.clearRect(0, 0, cv.width, cv.height);
+    for (const c of M.cells) { const g = c.g, n = Math.hypot(g[0], g[1], 1), sh = Math.max(0, (-g[0] * Lx - g[1] * Ly + Lz) / n), v = Math.min(1.25, 0.28 + 1.05 * sh);
+      cx.beginPath(); for (let i = 0; i < c.p.length; i++) { const p = c.p[i]; if (i) cx.lineTo(p[0] * k, p[1] * k); else cx.moveTo(p[0] * k, p[1] * k); } cx.closePath();
+      const col = `rgb(${Math.min(255, 185 * v) | 0},${Math.min(255, 180 * v) | 0},${Math.min(255, 168 * v) | 0})`; cx.fillStyle = col; cx.fill(); cx.lineWidth = showCells.checked ? 0.7 : 1; cx.strokeStyle = showCells.checked ? 'rgba(20,40,60,0.55)' : col; cx.stroke(); }
+    let bareA = 0; for (const c of R.bare(M)) bareA += R.area(c.p);
+    const marks = struck + pits, fa = R.faces(M);
+    stat.innerHTML = marks + cracks === 0 ? '<b>No marks: 1 polygon, 2 triangles.</b> The map is the flat face.' :
+      `<b>${struck}</b> scars, <b>${pits}</b> pits, <b>${cracks}</b> crack${cracks === 1 ? '' : 's'} &rarr; <b>${fa.toLocaleString('en')}</b> flat faces, held here as <b>${M.cells.length.toLocaleString('en')}</b> convex pieces &middot; last step <b>${last.toFixed(1)} ms</b> on this device &middot; bare <b>${(100 * bareA / (W * H)).toFixed(1)}%</b>`; };
+  const on = (id, f) => document.getElementById(id).addEventListener('click', () => { f(); draw(); });
+  on('b-flat', reset); on('b-strike', strikeEdges); on('b-cover', pitBare); on('b-crack', crack); showCells.addEventListener('change', draw);
+  reset(); strikeEdges(); pitBare(); crack(); draw();
+})();
+</script>
