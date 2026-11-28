@@ -2246,7 +2246,8 @@ function surfaceWall(w, seed) {
     for (const j of near(B.l, B.h, 0, si)) { if (j >= si) continue; const O = owned(si, j); if (O) cutters.push({ planes: O.planes, lo: O.lo, hi: O.hi, kind: KIND.SIDE, poly: O.poly }); }
     /* the scars of other stones that chip this one: each cone within this stone */
     /* a hair (0.01 mm) shallower than in the stone it is struck on, so where the two overlap one floor is seen, not two in one place */
-    for (const C of foreign[si]) { const pl_ = C.planes.map(h => ({ n: h.n, b: h.b - 0.01, role: 'cut' })); let poly = C.cone; for (const h of pl_) { if (!poly.length) break; poly = cutSolid(poly, h); } for (const L of PL) { if (!poly.length) break; poly = cutSolid(poly, { n: L.n, b: L.b, role: 'stone' }); } if (!poly.length) continue;
+    for (const C of foreign[si]) { const pl_ = C.planes.map(h => ({ n: h.n, b: h.b - 0.01, role: 'cut' })); let poly = C.cone; for (const h of pl_) { if (!poly.length) break; poly = cutSolid(poly, h); } /* cut by the stone's faces it reaches past only (a face no corner of it lies beyond changes nothing) */
+      for (const L of PL) { if (!poly.length) break; let out_ = false; for (const f of poly) { for (const v of f.verts) if (L.n[0] * v[0] + L.n[1] * v[1] + L.n[2] * v[2] > L.b + 1e-9) { out_ = true; break; } if (out_) break; } if (out_) poly = cutSolid(poly, { n: L.n, b: L.b, role: 'stone' }); } if (!poly.length) continue;
       const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9]; for (const f of poly) for (const v of f.verts) for (let j = 0; j < 3; j++) { lo[j] = Math.min(lo[j], v[j]); hi[j] = Math.max(hi[j], v[j]); } cutters.push({ planes: pl_, lo, hi, kind: KIND.SCAR, poly }); }
     nCutters += cutters.length; if (!cutters.length) return;   /* a stone nothing cuts keeps its faces as carved */
     // the planes, by place: one number for a plane whichever way round and however many faces or cutters lie on it
@@ -2322,7 +2323,10 @@ function surfaceWall(w, seed) {
     // each cutter's faces within the stone: its plane inside the stone and inside its own cutter, less every other cutter
     /* each cutter's faces within the stone, as its solid has them: an edge's plane is the one other plane of the cutter or the stone both its ends lie on */
     const stoneCand = PL.map(L => [L.n, L.b, stonePl[PL.indexOf(L)]]);
-    cutters.forEach((C, ci) => { const cand = [...C.planes.map((h, i) => [h.n, h.b, cutPl[ci][i]]), ...stoneCand];
+    const stoneByN = new Map(PL.map((L, i) => [L.n, stoneCand[i]]));
+    cutters.forEach((C, ci) => { const cand = C.planes.map((h, i) => [h.n, h.b, cutPl[ci][i]]);
+      /* an edge of a cutter's face lies on another of the cutter's planes or on a face of the stone the cutter was clipped by: only those are tried (every face of the stone, if one is not known) */
+      { let all = false; const seen = new Set(); for (const F of C.poly) if (F.role === 'stone') { const sc = stoneByN.get(F.n); if (!sc) { all = true; break; } if (!seen.has(sc)) { seen.add(sc); cand.push(sc); } } if (all) { cand.length = C.planes.length; for (const sc of stoneCand) cand.push(sc); } }
       for (const F of C.poly) { if (F.role !== 'cut' || F.verts.length < 3) continue; const [f, sf] = pid(F.n, F.b), N = mul(F.n, -1), ids = [], e = [];
         for (const x of F.verts) { const i = weld(x); if (ids[ids.length - 1] !== i) ids.push(i); } if (ids.length > 1 && ids[0] === ids[ids.length - 1]) ids.pop(); if (ids.length < 3) continue;
         if (areaOf(ids, N) < 0) ids.reverse();
@@ -2340,7 +2344,7 @@ function surfaceWall(w, seed) {
        edge, where the planes meet too flatly to agree): counted */
     const vrep = new Map(), vfind = a => { let r = a; while (vrep.has(r)) r = vrep.get(r); return r; };
     (() => {
-    { const seenV = new Int32Array(V.length).fill(-1); let fi_ = 0; for (const F of FAC) { const ids = []; for (const pc of F.pieces) for (const v of pc.v) if (seenV[v] !== fi_) { seenV[v] = fi_; ids.push(v); } fi_++; if (ids.length < 2) continue;
+    { const seenV = new Int32Array(V.length).fill(-1); let fi_ = 0; for (const F of FAC) { if (F.pieces.length < 2) continue; const ids = []; for (const pc of F.pieces) for (const v of pc.v) if (seenV[v] !== fi_) { seenV[v] = fi_; ids.push(v); } fi_++; if (ids.length < 2) continue;
         ids.sort((a, b) => V[a][0] - V[b][0]);   /* along x, each looks only at those within JOIN of it */
         for (let i = 0; i < ids.length; i++) { const A = V[ids[i]]; for (let j = i + 1; j < ids.length; j++) { const B = V[ids[j]], dx = B[0] - A[0]; if (dx > JOIN) break; const dy = A[1] - B[1], dz = A[2] - B[2];
             if (dx * dx + dy * dy + dz * dz < JOIN * JOIN) { const ra = vfind(ids[i]), rb = vfind(ids[j]); if (ra !== rb) { vrep.set(rb, ra); nJoin++; } } } } } }
