@@ -136,7 +136,7 @@ dd { margin: 0; max-width: 60ch; }
   </div>
   <div class="scroll"><table class="nums">
     <tr><th></th><th class="n">Today</th><th class="n">After</th><th>Basis</th></tr>
-    <tr><td>Surface pass, Granite seed 1</td><td class="n">1,810 ms</td><td class="n">under 150 ms</td><td><span class="tag e">estimate</span> a 90-line sketch of the map takes 80 to 100 &micro;s a mark with no index; 3,939 marks</td></tr>
+    <tr><td>Surface pass, Granite seed 1</td><td class="n">1,810 ms</td><td class="n">under 150 ms</td><td><span class="tag e">estimate, not yet shown</span> the first spike kept today&rsquo;s volumes and came in at about 2,000 ms; see The spike, run</td></tr>
     <tr><td>Triangles, Granite seed 1</td><td class="n">383,188</td><td class="n">about 107,000</td><td><span class="tag m">measured</span> Manifold&rsquo;s exact result on the same stones and cutters</td></tr>
     <tr><td>&ldquo;Is this point in another stone?&rdquo;</td><td class="n">0.3 to 6.3 M</td><td class="n">0</td><td>cover is worked out once per face</td></tr>
     <tr><td>Overhang paint after display</td><td class="n">19 to 617 ms</td><td class="n">read, not measured</td><td>support is decided once; the paint reads it</td></tr>
@@ -383,6 +383,30 @@ dd { margin: 0; max-width: 60ch; }
     <li><b>Before the Rust element:</b> a word table from the page&rsquo;s controls to the registry&rsquo;s (Reach, Width, Thickness and Spacing to <code>spacing</code>; Span to <code>carry</code>; Wander to <code>bend</code>; Direction to dip and facing), and the map and support placed behind <code>dt-kit</code>.</li>
   </ol>
   <p>Orin&rsquo;s kernel: four kinds (plane, cell, cleave, mark) and five verbs (cut, corners, inside, carry, lower). A map is a face and its marks; a stone is its cells less its marks; everything else derives. Approved as they stand: A5, B3, D2, F2, the intent of C3, and the spike first with Manifold as the fallback.</p>
+</section>
+
+<section>
+  <h2>The spike, run</h2>
+  <p>Run on 28 Nov on a copy of the page, following Orin&rsquo;s general case: a stone is its cell less its marks&rsquo; cells, so the scars and the look are today&rsquo;s exactly. Only the making of the surface changed. The copy is <a href="https://claude.ai/artifact/5u5hBa6YYFUinECPVctfA3">Cliffs, Whole Faces</a>.</p>
+  <p><b>What it does.</b> A face is still cut into convex pieces, but the pieces are no longer triangles. Along each line of a face, the pieces&rsquo; edges are summed by direction, so what two pieces share cancels and the face&rsquo;s true outline is left. Each stretch of outline is split at every corner any face has on that same line, so the two faces either side of a line use the same corners. The outlines are chained into loops, holes included, and each face is triangulated once. The weld after meshing, the search for corners on edges, the fins and the gap fans are gone: about 25 lines of the old pass replaced by about 40.</p>
+  <div class="scroll"><table class="nums">
+    <tr><th>Wall</th><th class="n">Open edges</th><th class="n">Repairs</th><th class="n">Triangles today</th><th class="n">Spike</th><th class="n">Manifold</th><th class="n">Surface today</th><th class="n">Spike</th><th class="n">Red</th></tr>
+    <tr><td>Granite 1</td><td class="n">0</td><td class="n">none</td><td class="n">383,188</td><td class="n">118,808</td><td class="n">106,774</td><td class="n">1,810 ms</td><td class="n">about 2,000 ms</td><td class="n">0.14 (same)</td></tr>
+    <tr><td>Fieldstone 0</td><td class="n">0</td><td class="n">none</td><td class="n">184,396</td><td class="n">99,920</td><td class="n">104,740</td><td class="n">976 ms</td><td class="n">about 1,130 ms</td><td class="n">0.04 (same)</td></tr>
+    <tr><td>Layered 0</td><td class="n">0</td><td class="n">none</td><td class="n">291,118</td><td class="n">112,878</td><td class="n">111,358</td><td class="n">1,442 ms</td><td class="n">about 1,530 ms</td><td class="n">0.05 (same)</td></tr>
+    <tr><td>Ashlar 0</td><td class="n">0</td><td class="n">none</td><td class="n">183,718</td><td class="n">63,632</td><td class="n">64,566</td><td class="n">743 ms</td><td class="n">about 900 ms</td><td class="n">0.12 (same)</td></tr>
+    <tr><td>Columns 0</td><td class="n">0</td><td class="n">none</td><td class="n">159,174</td><td class="n">51,960</td><td class="n">52,698</td><td class="n">699 ms</td><td class="n">about 870 ms</td><td class="n">0 (same)</td></tr>
+  </table></div>
+  <p><b>Against the exit test.</b></p>
+  <ul>
+    <li><b>Closed: yes,</b> on all seven flaked walls (the five above and Granite seeds 0 and 2), with nothing mended. With Flaking off, six of seven; Layered has 4 open edges left, from three faces whose corners fall exactly in line.</li>
+    <li><b>Triangles: yes.</b> Within 12% of Manifold&rsquo;s on every wall, and under it on three: 31 to 55% of today&rsquo;s.</li>
+    <li><b>Red: the same</b> on every wall.</li>
+    <li><b>Look: the same.</b> Rendered at three cameras on Granite seed 1 beside today&rsquo;s page, under 1% of pixels differ.</li>
+    <li><b>Time: no.</b> It is 10 to 25% slower than today, not under 150 ms. The estimate at the top of this page was wrong for this route.</li>
+  </ul>
+  <p><b>Why the time did not move.</b> Granite seed 1, in Node: placing the scars by trial 340 ms; cutting faces into pieces 1,080 ms; the new outline step 560 ms. Taking marks out as volumes is still the cost, as finding 1 says, and this spike kept that on purpose to keep today&rsquo;s look exactly. Fieldstone spends 590 ms just placing scars, most of it asking about other stones.</p>
+  <p><b>What it settles.</b> Whole faces work, and corners named by their planes need no welding after. That is worth landing in the page as it stands: the same look, closed without repairs, a third of the triangles. Speed has to come from the two changes this spike did not make: scars and cracks lowered as heights on a face&rsquo;s map where they do not reach an edge, and scars placed by reading the map instead of by trial. Those are the next spike.</p>
 </section>
 
 <section>
